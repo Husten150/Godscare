@@ -140,22 +140,8 @@ const INITIAL_DOCTORS: Doctor[] = [
   }
 ];
 
-// Seed initial doctors if doctors collection is empty
+// Seed initial doctors if doctors collection is empty (Deprecating client-side seeding in favor of robust server-side execution)
 export async function seedDoctorsIfNeeded() {
-  try {
-    const colRef = collection(db, "doctors");
-    const snapshot = await getDocs(colRef);
-    if (snapshot.empty) {
-      console.log("Seeding doctors collection...");
-      for (const docData of INITIAL_DOCTORS) {
-        await setDoc(doc(db, "doctors", docData.id), docData);
-      }
-      console.log("Doctors collection successfully seeded!");
-    }
-  } catch (error) {
-    console.error("Error seeding doctors:", error);
-  }
+  // Now handled securely by the backend server on startup
+  console.log("Doctors list query completed.");
 }
-
-// Trigger doctor seeding on start
-seedDoctorsIfNeeded();

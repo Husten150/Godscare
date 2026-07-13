@@ -83,6 +83,11 @@ app.post("/api/payments/initialize", async (req: express.Request, res: express.R
   const cleanTargetId = targetId || "none";
   const cleanMedicineName = medicineName || "";
 
+  // Dynamic host & protocol detection for callback_url
+  const proto = req.headers["x-forwarded-proto"] || req.protocol || "http";
+  const host = req.headers["x-forwarded-host"] || req.get("host") || `localhost:${PORT}`;
+  const dynamicAppUrl = `${proto}://${host}`;
+
   const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
   const reference = `gcare-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
@@ -110,7 +115,7 @@ app.post("/api/payments/initialize", async (req: express.Request, res: express.R
         email,
         amount: Math.round(amount * 100), // Paystack expects amount in Kobo (Naira cents)
         reference,
-        callback_url: `${process.env.APP_URL || `http://localhost:${PORT}`}/api/payments/verify-callback?userId=${userId}`,
+        callback_url: `${process.env.APP_URL || dynamicAppUrl}/api/payments/verify-callback?userId=${userId}`,
         metadata: {
           userId,
           paymentType,
@@ -365,6 +370,118 @@ app.post("/api/payments/verify", async (req: express.Request, res: express.Respo
   } catch (err: any) {
     console.error("[Billing] Verification Failure:", err);
     res.status(500).json({ error: "Internal payment processing error." });
+  }
+});
+
+// Paystack GET Redirect Callback: verify and redirect to dashboard with query status
+app.get("/api/payments/verify-callback", async (req: express.Request, res: express.Response) => {
+  const reference = (req.query.reference || req.query.trxref) as string;
+  const userId = req.query.userId as string;
+
+  if (!reference) {
+    res.redirect("/?payment=error&message=Missing+transaction+reference");
+    return;
+  }
+
+  try {
+    const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackSecret || paystackSecret === "dummy_key") {
+      // Sandbox fallback
+      res.redirect(`/?payment=success&reference=${reference}`);
+      return;
+    }
+
+    const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${paystackSecret}`
+      }
+    });
+
+    const data = await paystackRes.json();
+    if (data.status && data.data.status === "success") {
+      const paymentAmount = data.data.amount / 100; // convert Kobo to Naira
+      const currency = data.data.currency;
+
+      let finalPaymentType = "premium";
+      let finalTargetId = "none";
+      let finalMedicineName = "";
+      let actualUserId = userId || "none";
+
+      if (data.data.metadata) {
+        finalPaymentType = data.data.metadata.paymentType || finalPaymentType;
+        finalTargetId = data.data.metadata.targetId || finalTargetId;
+        finalMedicineName = data.data.metadata.medicineName || finalMedicineName;
+        actualUserId = data.data.metadata.userId || actualUserId;
+      }
+
+      console.log(`[Paystack Callback] Verification successful for user: ${actualUserId} (${finalPaymentType})`);
+
+      if (finalPaymentType === "premium") {
+        const userRef = doc(db, "users", actualUserId);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          await updateDoc(userRef, { isPremium: true });
+        }
+      } else if (finalPaymentType === "appointment") {
+        const appQuery = query(collection(db, "appointments"), where("id", "==", finalTargetId));
+        const appSnap = await getDocs(appQuery);
+        if (!appSnap.empty) {
+          const docId = appSnap.docs[0].id;
+          await updateDoc(doc(db, "appointments", docId), {
+            paymentStatus: "paid",
+            paymentReference: reference
+          });
+        }
+      } else if (finalPaymentType === "bill") {
+        const billQuery = query(collection(db, "medical_bills"), where("id", "==", finalTargetId));
+        const billSnap = await getDocs(billQuery);
+        if (!billSnap.empty) {
+          const docId = billSnap.docs[0].id;
+          await updateDoc(doc(db, "medical_bills", docId), {
+            status: "paid",
+            paymentReference: reference,
+            paidAt: new Date().toISOString()
+          });
+        }
+      } else if (finalPaymentType === "medicine") {
+        const purchaseId = `purch-${Date.now()}`;
+        const purchaseDoc = {
+          id: purchaseId,
+          patientId: actualUserId,
+          medicineId: finalTargetId,
+          medicineName: finalMedicineName || "Prescribed Medicine",
+          price: paymentAmount,
+          status: "paid",
+          purchasedAt: new Date().toISOString(),
+          paymentReference: reference
+        };
+        await setDoc(doc(db, "medicine_purchases", purchaseId), purchaseDoc);
+      }
+
+      // Save payment transaction record
+      const payLogId = `pay-${Date.now()}`;
+      const paymentLogDoc = {
+        id: payLogId,
+        patientId: actualUserId,
+        amount: paymentAmount,
+        currency,
+        status: "success",
+        reference,
+        paymentType: finalPaymentType,
+        targetId: finalTargetId,
+        createdAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, "payments", payLogId), paymentLogDoc);
+
+      res.redirect(`/?payment=success&type=${finalPaymentType}&reference=${reference}`);
+    } else {
+      console.warn("[Paystack Callback] Verification failed:", data.message);
+      res.redirect(`/?payment=error&message=${encodeURIComponent(data.message || "Unverified")}`);
+    }
+  } catch (err: any) {
+    console.error("[Paystack Callback] Verification exception:", err);
+    res.redirect(`/?payment=error&message=${encodeURIComponent(err.message || "Verification Exception")}`);
   }
 });
 
@@ -747,7 +864,112 @@ Always summarize your findings and announce what tools you are executing. Explai
 // VITE DEV SERVER / PRODUCTION CONFIG
 // ==========================================
 
+// Pre-seeded default doctors list for the clinical ecosystem
+const INITIAL_DOCTORS = [
+  {
+    id: "doc-vance",
+    name: "Dr. Elizabeth Vance",
+    specialty: "Cardiologist",
+    department: "Cardiology",
+    experience: "15 years",
+    education: "M.D. Stanford University School of Medicine",
+    rating: 4.9,
+    availableDays: ["Monday", "Wednesday", "Friday"],
+    availableHours: ["09:00 AM", "10:00 AM", "11:00 AM", "02:00 PM", "03:00 PM"],
+    image: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400",
+    bio: "Dr. Vance is a board-certified cardiologist with a passion for preventive medicine and non-invasive cardiac imaging techniques."
+  },
+  {
+    id: "doc-thorne",
+    name: "Dr. Marcus Thorne",
+    specialty: "Pediatrician",
+    department: "Pediatrics",
+    experience: "10 years",
+    education: "M.D. Johns Hopkins University School of Medicine",
+    rating: 4.8,
+    availableDays: ["Tuesday", "Thursday", "Friday"],
+    availableHours: ["09:00 AM", "10:30 AM", "11:30 AM", "01:30 PM", "02:30 PM", "04:00 PM"],
+    image: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400",
+    bio: "Dedicated to providing compassionate, child-centric care and supporting families through every step of their children's development."
+  },
+  {
+    id: "doc-lin",
+    name: "Dr. Sarah Lin",
+    specialty: "Neurologist",
+    department: "Neurology",
+    experience: "12 years",
+    education: "Ph.D. & M.D. Harvard Medical School",
+    rating: 4.95,
+    availableDays: ["Monday", "Tuesday", "Thursday"],
+    availableHours: ["10:00 AM", "11:00 AM", "02:00 PM", "03:30 PM"],
+    image: "https://images.unsplash.com/photo-1594824813573-246434de83fb?auto=format&fit=crop&q=80&w=400",
+    bio: "Dr. Lin is an expert neuroscientist and neurologist, specializing in neurodegenerative conditions, migraines, and cognitive care."
+  },
+  {
+    id: "doc-carter",
+    name: "Dr. James Carter",
+    specialty: "Orthopedic Surgeon",
+    department: "Orthopedics",
+    experience: "14 years",
+    education: "M.D. Yale School of Medicine",
+    rating: 4.7,
+    availableDays: ["Wednesday", "Thursday", "Friday"],
+    availableHours: ["08:30 AM", "10:00 AM", "11:30 AM", "01:00 PM", "03:00 PM"],
+    image: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=400",
+    bio: "Focuses on sports injuries, advanced arthroscopic joint repairs, and personalized rehabilitation programs for professional athletes and active patients."
+  },
+  {
+    id: "doc-patel",
+    name: "Dr. Chloe Patel",
+    specialty: "Dermatologist",
+    department: "Dermatology",
+    experience: "8 years",
+    education: "M.D. University of Michigan",
+    rating: 4.9,
+    availableDays: ["Monday", "Wednesday", "Thursday"],
+    availableHours: ["09:30 AM", "11:00 AM", "02:00 PM", "03:00 PM", "04:30 PM"],
+    image: "https://images.unsplash.com/photo-1527613426441-4da17471b66d?auto=format&fit=crop&q=80&w=400",
+    bio: "Provides advanced clinical, surgical, and cosmetic dermatology solutions, focusing on acne care, eczema, and skin cancer screening."
+  },
+  {
+    id: "doc-chen",
+    name: "Dr. Robert Chen",
+    specialty: "General Physician",
+    department: "General Medicine",
+    experience: "18 years",
+    education: "M.D. Columbia University Vagelos College of Physicians and Surgeons",
+    rating: 4.85,
+    availableDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    availableHours: ["09:00 AM", "10:30 AM", "12:00 PM", "02:00 PM", "03:30 PM"],
+    image: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=400",
+    bio: "A trusted family physician specialized in comprehensive diagnostic evaluations, chronic disease management, and long-term vitality counseling."
+  }
+];
+
+// Helper to seed doctors dynamically on startup
+async function seedDoctorsCollection() {
+  try {
+    if (!db) return;
+    const colRef = collection(db, "doctors");
+    const snapshot = await getDocs(colRef);
+    if (snapshot.empty) {
+      console.log("[Seeding] Seeding doctors database securely from server...");
+      for (const docData of INITIAL_DOCTORS) {
+        await setDoc(doc(db, "doctors", docData.id), docData);
+      }
+      console.log("[Seeding] Secure backend doctor seeding completed successfully!");
+    } else {
+      console.log("[Seeding] Doctors database is already populated.");
+    }
+  } catch (error) {
+    console.error("[Seeding Error] Failed to seed doctors:", error);
+  }
+}
+
 async function startServer() {
+  // Seed the system clinicians list
+  await seedDoctorsCollection();
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

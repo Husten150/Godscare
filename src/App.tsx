@@ -20,6 +20,48 @@ export default function App() {
   const [loading, setLoading] = React.useState(true);
   const [bookingDoctor, setBookingDoctor] = React.useState<Doctor | null>(null);
   const [selectedDepartment, setSelectedDepartment] = React.useState<string>("All Departments");
+  const [paymentNotification, setPaymentNotification] = React.useState<{ status: "success" | "error"; message: string } | null>(null);
+
+  // Check URL query parameters for payment status on mount
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    const type = params.get("type");
+    const message = params.get("message");
+
+    if (payment === "success") {
+      let friendlyType = "your transaction";
+      if (type === "premium") friendlyType = "your premium care subscription upgrade";
+      else if (type === "appointment") friendlyType = "your clinical appointment booking fee";
+      else if (type === "bill") friendlyType = "your outstanding medical invoice payment";
+      else if (type === "medicine") friendlyType = "your prescribed pharmacy medication order";
+
+      setPaymentNotification({
+        status: "success",
+        message: `Payment for ${friendlyType} has been successfully verified! Your clinical record is fully updated.`
+      });
+
+      // Auto-route to dashboard/admin if logged in
+      const sessionStr = localStorage.getItem("greencare_session");
+      if (sessionStr) {
+        try {
+          const profile = JSON.parse(sessionStr);
+          setCurrentView(profile.role === "admin" ? "admin" : "dashboard");
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      // Clean the URL query params so they don't trigger again on refresh
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (payment === "error") {
+      setPaymentNotification({
+        status: "error",
+        message: `Payment verification failed: ${message || "the transaction could not be completed."}`
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   // Custom navigation handler to clear department filter when switching general views
   const handleSetView = (view: string) => {
@@ -169,6 +211,30 @@ export default function App() {
         userProfile={userProfile} 
         onLogout={handleLogout} 
       />
+
+      {/* Floating alert banner for verification notifications */}
+      {paymentNotification && (
+        <div className="max-w-7xl mx-auto w-full px-4 pt-4">
+          <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 shadow-xs ${
+            paymentNotification.status === "success" 
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
+              : "bg-rose-50 border-rose-200 text-rose-800"
+          }`}>
+            <div className="flex items-center gap-2 text-xs md:text-sm font-semibold">
+              <span className="text-base">
+                {paymentNotification.status === "success" ? "🎉" : "⚠️"}
+              </span>
+              <p>{paymentNotification.message}</p>
+            </div>
+            <button 
+              onClick={() => setPaymentNotification(null)}
+              className="text-zinc-400 hover:text-zinc-700 font-mono text-xs font-bold px-2 py-1 hover:bg-zinc-100 rounded-md transition-all cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content View Switcher */}
       <main className="grow">
