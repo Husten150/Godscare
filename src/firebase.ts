@@ -8,7 +8,7 @@ import {
   User as FirebaseUser
 } from "firebase/auth";
 import { 
-  getFirestore, 
+  initializeFirestore, 
   collection, 
   doc, 
   getDoc, 
@@ -37,8 +37,10 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with custom databaseId
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Initialize Firestore with custom databaseId and force long-polling connection
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+}, firebaseConfig.firestoreDatabaseId);
 
 // Initialize Auth
 export const auth = getAuth(app);
