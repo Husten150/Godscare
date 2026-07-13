@@ -5,7 +5,8 @@ import {
   sendEmailVerification,
   signOut,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  onAuthStateChanged
 } from "firebase/auth";
 import { 
   doc, 
@@ -24,7 +25,9 @@ import {
   CheckCircle,
   Key,
   Shield,
-  Stethoscope
+  Stethoscope,
+  ExternalLink,
+  RefreshCw
 } from "lucide-react";
 
 interface AuthProps {
@@ -41,6 +44,118 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
   const [loading, setLoading] = React.useState(false);
   const [showVerification, setShowVerification] = React.useState(false);
   const [verificationEmail, setVerificationEmail] = React.useState("");
+  const [resending, setResending] = React.useState(false);
+
+  // Monitor auth changes on mount to check if an active unverified session exists
+  React.useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && !user.emailVerified) {
+        setVerificationEmail(user.email || "");
+        setShowVerification(true);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Background polling to detect when the user verifies their email
+  React.useEffect(() => {
+    let intervalId: any;
+    
+    if (showVerification) {
+      intervalId = setInterval(async () => {
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          try {
+            await currentUser.reload();
+            if (currentUser.emailVerified) {
+              clearInterval(intervalId);
+              setSuccessMsg("Email successfully verified! Transitioning to your patient portal...");
+              
+              const uid = currentUser.uid;
+              const userDocRef = doc(db, "users", uid);
+              const userDocSnap = await getDoc(userDocRef);
+              
+              let profile: UserProfile;
+              if (userDocSnap.exists()) {
+                profile = userDocSnap.data() as UserProfile;
+              } else {
+                profile = {
+                  uid,
+                  email: currentUser.email || "",
+                  name: name || currentUser.displayName || currentUser.email?.split("@")[0] || "Patient",
+                  role: "patient",
+                  createdAt: new Date().toISOString()
+                };
+                await setDoc(userDocRef, profile);
+              }
+              
+              localStorage.setItem("greencare_session", JSON.stringify(profile));
+              setTimeout(() => {
+                onAuthSuccess(profile);
+              }, 1200);
+            }
+          } catch (err) {
+            console.error("Error during verification polling:", err);
+          }
+        }
+      }, 3000);
+    }
+    
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [showVerification, name, onAuthSuccess]);
+
+  // Determine inbox URL based on email address domain
+  const getInboxUrl = (emailStr: string) => {
+    const domain = emailStr.split("@")[1]?.toLowerCase() || "";
+    if (domain === "gmail.com") return { url: "https://mail.google.com", name: "Gmail" };
+    if (domain === "yahoo.com" || domain === "ymail.com") return { url: "https://mail.yahoo.com", name: "Yahoo Mail" };
+    if (["outlook.com", "hotmail.com", "live.com", "msn.com"].includes(domain)) return { url: "https://outlook.live.com", name: "Outlook Mail" };
+    if (domain === "aol.com") return { url: "https://mail.aol.com", name: "AOL Mail" };
+    if (domain === "icloud.com" || domain === "me.com") return { url: "https://www.icloud.com/mail", name: "iCloud Mail" };
+    return { url: `https://www.${domain}`, name: domain || "Webmail" };
+  };
+
+  // Resend Verification link
+  const handleResendVerification = async () => {
+    if (resending) return;
+    setResending(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+    try {
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        const actionCodeSettings = {
+          url: window.location.origin,
+          handleCodeInApp: false,
+        };
+        await sendEmailVerification(currentUser, actionCodeSettings);
+        setSuccessMsg("A fresh email verification link has been sent to your inbox!");
+      } else {
+        setErrorMsg("Session expired. Please sign in again to receive a link.");
+      }
+    } catch (err: any) {
+      console.error("Resend error:", err);
+      setErrorMsg(err.message || "Failed to resend verification link.");
+    } finally {
+      setResending(false);
+    }
+  };
+
+  // Exit/Cancel verification view and clear the unverified auth state
+  const handleCancelVerification = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error("Sign out error:", err);
+    } finally {
+      setShowVerification(false);
+      setIsLogin(true);
+      setErrorMsg("");
+      setSuccessMsg("");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,14 +196,12 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
           }
         }
 
-        // Enforce email verification for actual Firebase Auth users
+        // Direct unverified users to the secure verification view to let them verify
         if (isFirebaseUser && firebaseUser && !firebaseUser.emailVerified) {
-          setErrorMsg("Your email address is not verified yet. Please check your inbox and verify your email to log in.");
-          try {
-            await signOut(auth);
-          } catch (signOutErr) {
-            console.error("Error signing out unverified user:", signOutErr);
-          }
+          setVerificationEmail(email);
+          setShowVerification(true);
+          setSuccessMsg("Verification required. Please check your inbox to verify your account!");
+          setLoading(false);
           return;
         }
 
@@ -151,11 +264,16 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
 
         if (isFirebaseUser && userCredential && userCredential.user) {
           try {
-            await sendEmailVerification(userCredential.user);
+            // Configure action settings to return the user back to the application once verified
+            const actionCodeSettings = {
+              url: window.location.origin,
+              handleCodeInApp: false,
+            };
+            await sendEmailVerification(userCredential.user, actionCodeSettings);
           } catch (verifyErr) {
             console.error("Failed to send verification email:", verifyErr);
           }
-          // Do not log them in directly. Let them know they need to verify!
+          // Do not log them in directly. Transition to inbox verification flow
           setVerificationEmail(email);
           setShowVerification(true);
         } else {
@@ -245,52 +363,98 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
   };
 
   if (showVerification) {
+    const inboxInfo = getInboxUrl(verificationEmail);
+
     return (
-      <div className="py-16 bg-[#fbfbfc] font-sans min-h-[80vh] flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 text-zinc-800">
+      <div className="py-16 bg-[#fbfbfc] font-sans min-h-[80vh] flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 text-zinc-800 animate-in fade-in duration-300">
         
         {/* Container Card */}
-        <div className="bg-white rounded-xl border border-zinc-200/80 max-w-md w-full p-6 md:p-8 space-y-6 text-center shadow-xs">
-          
+        <div className="bg-white rounded-xl border border-zinc-200/80 max-w-md w-full p-6 md:p-8 space-y-6 text-center shadow-lg relative overflow-hidden">
+          {/* Subtle green top bar decoration */}
+          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600"></div>
+
           {/* Logo/Icon block */}
           <div className="space-y-2">
             <div className="mx-auto h-16 w-16 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 animate-pulse">
               <Mail className="h-8 w-8" />
             </div>
             <h2 className="text-2xl font-bold text-zinc-900 tracking-tight font-display">
-              Verify your email
+              Verify your identity
             </h2>
-            <p className="text-sm text-zinc-500 font-sans">
-              We've sent a verification link to <span className="font-semibold text-zinc-900">{verificationEmail}</span>.
+            <p className="text-xs text-zinc-500 font-sans leading-relaxed">
+              We've sent a secure clinical portal access link to <br />
+              <span className="font-semibold text-zinc-900 bg-zinc-50 border border-zinc-150 px-2 py-0.5 rounded-md mt-1 inline-block">{verificationEmail}</span>.
             </p>
+          </div>
+
+          {/* Real-time status notifications */}
+          {successMsg && (
+            <div className="bg-emerald-50 text-emerald-800 text-xs p-3 rounded-lg border border-emerald-100 font-sans text-left flex items-start gap-2">
+              <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          {errorMsg && (
+            <div className="bg-red-50 text-red-700 text-xs p-3 rounded-lg border border-red-100 font-sans text-left flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {/* Action Link Button - Leads to user's webmail inbox directly */}
+          <div className="space-y-3">
+            <a
+              href={inboxInfo.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-3 bg-zinc-950 hover:bg-zinc-850 text-white rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md hover:scale-[1.01]"
+              id="auth-go-to-inbox-btn"
+            >
+              <span>Go to {inboxInfo.name} Inbox</span>
+              <ExternalLink className="h-4 w-4 text-emerald-400" />
+            </a>
+
+            {/* Listening loader status */}
+            <div className="flex items-center justify-center gap-2 text-[10px] text-zinc-400 font-mono font-bold uppercase tracking-widest pt-1">
+              <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-500" />
+              <span>Listening for verification link click...</span>
+            </div>
           </div>
 
           {/* Guidelines box */}
           <div className="bg-emerald-50/40 rounded-xl p-4 border border-emerald-100/60 text-left text-xs text-zinc-700 space-y-2.5 font-sans leading-relaxed">
             <p className="font-semibold text-emerald-800 flex items-center gap-1.5">
-              <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
-              What should you do next?
+              <Shield className="h-4 w-4 text-emerald-600 shrink-0" />
+              Secure Hospital Portal Guidelines:
             </p>
             <ul className="space-y-1.5 list-disc list-inside text-zinc-600 pl-1">
-              <li>Check your inbox and spam folder for the verification email.</li>
-              <li>Click the confirmation link inside the email to activate your profile.</li>
-              <li>Once verified, click the button below to sign in.</li>
+              <li>Click the confirmation link inside the email to verify it's you.</li>
+              <li>Once clicked, you will be redirected back here, or this tab will instantly update.</li>
+              <li>Check your spam/junk folder if the email doesn't arrive in 2 minutes.</li>
             </ul>
           </div>
 
-          {/* Action button */}
-          <button
-            type="button"
-            onClick={() => {
-              setShowVerification(false);
-              setIsLogin(true);
-              setErrorMsg("");
-              setSuccessMsg("Email verification link sent! Please log in after verifying your account.");
-            }}
-            className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all flex items-center justify-center space-x-2 cursor-pointer"
-            id="auth-go-to-signin-btn"
-          >
-            <span>Back to Sign In</span>
-          </button>
+          {/* Secondary Actions */}
+          <div className="grid grid-cols-1 gap-2 pt-2 border-t border-zinc-100">
+            <button
+              type="button"
+              onClick={handleResendVerification}
+              disabled={resending}
+              className="w-full py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <RefreshCw className={`h-3 w-3 ${resending ? "animate-spin" : ""}`} />
+              <span>{resending ? "Sending new link..." : "Resend Verification Email"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCancelVerification}
+              className="w-full py-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-500 rounded-lg text-xs font-semibold cursor-pointer"
+            >
+              Cancel & Use Another Account
+            </button>
+          </div>
         </div>
       </div>
     );

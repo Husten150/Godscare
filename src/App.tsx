@@ -35,6 +35,15 @@ export default function App() {
       try {
         setLoading(true);
         if (firebaseUser) {
+          // If the user's email is not verified, restrict access and force auth screen
+          if (!firebaseUser.emailVerified) {
+            setUserProfile(null);
+            localStorage.removeItem("greencare_session");
+            setCurrentView("auth");
+            setLoading(false);
+            return;
+          }
+
           // Fetch additional profile data from Firestore
           const docRef = doc(db, "users", firebaseUser.uid);
           const docSnap = await getDoc(docRef);
@@ -123,7 +132,7 @@ export default function App() {
       localStorage.removeItem("greencare_session");
       setUserProfile(null);
       setBookingDoctor(null);
-      setCurrentView("home");
+      setCurrentView("auth");
     }
   };
 
