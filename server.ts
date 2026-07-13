@@ -34,7 +34,11 @@ app.use(express.json());
 let firebaseApp;
 let db: any;
 try {
-  const firebaseConfig = JSON.parse(fs.readFileSync(path.join(__dirname, "firebase-applet-config.json"), "utf-8"));
+  let configPath = path.join(__dirname, "firebase-applet-config.json");
+  if (!fs.existsSync(configPath)) {
+    configPath = path.join(process.cwd(), "firebase-applet-config.json");
+  }
+  const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
   firebaseApp = initializeApp(firebaseConfig);
   db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
   console.log(`[Firebase] Initialized Firestore connected to: ${firebaseConfig.firestoreDatabaseId}`);
@@ -463,14 +467,30 @@ app.get("/api/settings/fees", async (req: express.Request, res: express.Response
 // Update system settings/fees
 app.post("/api/settings/fees/update", async (req: express.Request, res: express.Response) => {
   const { appointmentBookingFee, premiumSubscriptionFee } = req.body;
+  if (!db) {
+    console.error("[Settings Error]: Firestore DB is not initialized.");
+    res.status(500).json({ error: "Firestore database is not initialized on the server." });
+    return;
+  }
+
+  const parsedBookingFee = Number(appointmentBookingFee);
+  const parsedPremiumFee = Number(premiumSubscriptionFee);
+
+  if (isNaN(parsedBookingFee) || isNaN(parsedPremiumFee)) {
+    res.status(400).json({ error: "Invalid fee amounts. Must be valid numbers." });
+    return;
+  }
+
   try {
     const docRef = doc(db, "system_settings", "fees");
     await setDoc(docRef, {
-      appointmentBookingFee: Number(appointmentBookingFee),
-      premiumSubscriptionFee: Number(premiumSubscriptionFee)
+      appointmentBookingFee: parsedBookingFee,
+      premiumSubscriptionFee: parsedPremiumFee
     });
+    console.log(`[Settings] Global fees updated: booking=${parsedBookingFee}, premium=${parsedPremiumFee}`);
     res.json({ success: true, message: "System fees updated successfully." });
   } catch (error: any) {
+    console.error("[Settings Error] Failed to update global fees in Firestore:", error);
     res.status(500).json({ error: error.message || "Failed to update system fees." });
   }
 });
