@@ -409,6 +409,37 @@ app.post("/api/medicines/:id/update", async (req: express.Request, res: express.
   }
 });
 
+// Add new medicine to catalog
+app.post("/api/medicines/add", async (req: express.Request, res: express.Response) => {
+  const { name, category, symptoms, description, price } = req.body;
+  if (!name || !category || !description || !price) {
+    res.status(400).json({ error: "Missing required medicine details: name, category, description, price." });
+    return;
+  }
+  try {
+    const id = `med-${Date.now()}`;
+    // Split symptoms if they are passed as a string or array
+    const symptomsArray = typeof symptoms === "string" 
+      ? symptoms.split(",").map((s: string) => s.trim()).filter((s: string) => s.length > 0)
+      : Array.isArray(symptoms) ? symptoms : ["General Symptoms"];
+
+    const newMed = {
+      id,
+      name,
+      category,
+      description,
+      symptoms: symptomsArray,
+      price: Number(price)
+    };
+
+    await setDoc(doc(db, "medicines", id), newMed);
+    res.json({ success: true, message: "Medicine added successfully.", medicine: newMed });
+  } catch (error: any) {
+    console.error("Error adding medicine:", error);
+    res.status(500).json({ error: error.message || "Failed to add medicine to catalog." });
+  }
+});
+
 // Get system settings/fees
 app.get("/api/settings/fees", async (req: express.Request, res: express.Response) => {
   try {

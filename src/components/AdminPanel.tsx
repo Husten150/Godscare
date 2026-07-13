@@ -97,6 +97,17 @@ export default function AdminPanel() {
   const [editMedDesc, setEditMedDesc] = React.useState("");
   const [updatingMedicine, setUpdatingMedicine] = React.useState(false);
 
+  // Medicine Create State
+  const [showAddMedForm, setShowAddMedForm] = React.useState(false);
+  const [newMedName, setNewMedName] = React.useState("");
+  const [newMedCategory, setNewMedCategory] = React.useState("mild");
+  const [newMedSymptoms, setNewMedSymptoms] = React.useState("");
+  const [newMedDescription, setNewMedDescription] = React.useState("");
+  const [newMedPrice, setNewMedPrice] = React.useState("");
+  const [addingNewMed, setAddingNewMed] = React.useState(false);
+  const [addMedError, setAddMedError] = React.useState("");
+  const [addMedSuccess, setAddMedSuccess] = React.useState("");
+
   // Bills Management States
   const [selectedBillingPatientId, setSelectedBillingPatientId] = React.useState("");
   const [selectedPatientBills, setSelectedPatientBills] = React.useState<any[]>([]);
@@ -208,6 +219,59 @@ export default function AdminPanel() {
     } catch (err) {
       console.error("Status update failed:", err);
       alert("Failed to update status.");
+    }
+  };
+
+  // Complete appointment and transition to writing a clinical summary for that patient
+  const handleCompleteAndSummarize = async (app: Appointment) => {
+    try {
+      // 1. Mark appointment as completed
+      const colRef = collection(db, "appointments");
+      const appSnap = await getDocs(colRef);
+      let docRefId = "";
+      appSnap.forEach((snap) => {
+        const item = snap.data() as Appointment;
+        if (item.id === app.id) {
+          docRefId = snap.id;
+        }
+      });
+
+      if (docRefId) {
+        await updateDoc(doc(db, "appointments", docRefId), {
+          status: "completed"
+        });
+      }
+
+      // 2. Load the patient's UserProfile
+      const patientQuery = query(collection(db, "users"), where("uid", "==", app.patientId));
+      const patientSnap = await getDocs(patientQuery);
+      let patientProfile: UserProfile | null = null;
+      patientSnap.forEach((docSnap) => {
+        patientProfile = docSnap.data() as UserProfile;
+      });
+
+      if (patientProfile) {
+        // 3. Select patients sub-tab
+        setActiveSubTab("patients");
+        // 4. Load full records of the patient
+        await inspectPatient(patientProfile);
+        
+        // 5. Pre-fill the new visit details
+        setNewVisitDoctorName(app.doctorName || "");
+        setNewVisitSpecialty(app.specialty || "");
+        setNewVisitReason(`Appointment: ${app.notes || "General Consultation"}`);
+        setNewVisitDate(app.date || new Date().toISOString().split("T")[0]);
+        setNewVisitSummary("");
+        setNewVisitPrescription("");
+      } else {
+        alert("Patient profile not found in system directory.");
+      }
+      
+      // Reload admin data to refresh appointments table
+      loadAdminData();
+    } catch (err) {
+      console.error("Complete & Summarize failed:", err);
+      alert("Error completing appointment and transitioning.");
     }
   };
 
@@ -386,6 +450,62 @@ export default function AdminPanel() {
       alert("Error updating medicine.");
     } finally {
       setUpdatingMedicine(false);
+    }
+  };
+
+  // Submit Add New Medicine Form
+  const handleAddNewMedicine = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (addingNewMed) return;
+
+    setAddMedError("");
+    setAddMedSuccess("");
+
+    if (!newMedName || !newMedDescription || !newMedPrice) {
+      setAddMedError("Please fill in Medicine Name, Description, and Retail Price.");
+      return;
+    }
+
+    try {
+      setAddingNewMed(true);
+      const res = await fetch("/api/medicines/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newMedName,
+          category: newMedCategory,
+          symptoms: newMedSymptoms,
+          description: newMedDescription,
+          price: Number(newMedPrice)
+        })
+      });
+
+      if (res.ok) {
+        setAddMedSuccess("New medicine formulation added to pharmacy stock successfully!");
+        // Reset fields
+        setNewMedName("");
+        setNewMedSymptoms("");
+        setNewMedDescription("");
+        setNewMedPrice("");
+        setNewMedCategory("mild");
+        
+        // Reload admin data
+        loadAdminData();
+        
+        // Hide form after brief delay
+        setTimeout(() => {
+          setShowAddMedForm(false);
+          setAddMedSuccess("");
+        }, 1500);
+      } else {
+        const d = await res.json();
+        setAddMedError(d.error || "Failed to add medicine.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setAddMedError("Error adding medicine formulation.");
+    } finally {
+      setAddingNewMed(false);
     }
   };
 
@@ -805,12 +925,20 @@ export default function AdminPanel() {
                                 </button>
                               )}
                               {app.status === "confirmed" && (
-                                <button
-                                  onClick={() => updateAppointmentStatus(app.id, "completed")}
-                                  className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-white rounded-md text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer inline-flex items-center gap-0.5"
-                                >
-                                  Checkoff Complete
-                                </button>
+                                <div className="inline-flex gap-1.5 flex-wrap justify-end">
+                                  <button
+                                    onClick={() => updateAppointmentStatus(app.id, "completed")}
+                                    className="px-2 py-1 border border-zinc-300 hover:bg-zinc-100 text-zinc-700 rounded-md text-[10px] font-semibold cursor-pointer"
+                                  >
+                                    Quick Complete
+                                  </button>
+                                  <button
+                                    onClick={() => handleCompleteAndSummarize(app)}
+                                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer inline-flex items-center gap-0.5 shadow-sm"
+                                  >
+                                    <PlusCircle className="h-3 w-3 text-emerald-200" /> Complete & Summarize
+                                  </button>
+                                </div>
                               )}
                               {app.status !== "cancelled" && app.status !== "completed" && (
                                 <button
@@ -1041,13 +1169,128 @@ export default function AdminPanel() {
 
                 {/* 2. APPROVED PHARMACY PRICING */}
                 <div className="bg-white border border-zinc-200 rounded-xl p-6 md:p-8 space-y-6">
-                  <div className="border-b border-zinc-100 pb-4">
-                    <h3 className="text-base font-bold text-zinc-950 font-display flex items-center gap-2">
-                      <Pill className="h-5 w-5 text-zinc-800" />
-                      <span>Approved Pharmacy Catalog & Drug Pricing</span>
-                    </h3>
-                    <p className="text-xs text-zinc-500 font-sans">Manage available therapeutics, symptoms targeting, and retail prices</p>
+                  <div className="border-b border-zinc-100 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                      <h3 className="text-base font-bold text-zinc-950 font-display flex items-center gap-2">
+                        <Pill className="h-5 w-5 text-emerald-500" />
+                        <span>Approved Pharmacy Catalog & Drug Pricing</span>
+                      </h3>
+                      <p className="text-xs text-zinc-500 font-sans">Manage available therapeutics, symptoms targeting, and retail prices</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddMedForm(!showAddMedForm);
+                        setAddMedError("");
+                        setAddMedSuccess("");
+                      }}
+                      className="px-3.5 py-2 bg-zinc-950 hover:bg-zinc-800 text-white rounded-lg text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <Plus className="h-3.5 w-3.5 text-emerald-400" />
+                      <span>{showAddMedForm ? "Cancel" : "Add Medicine"}</span>
+                    </button>
                   </div>
+
+                  {/* Collapsible Add New Medicine Form */}
+                  {showAddMedForm && (
+                    <form onSubmit={handleAddNewMedicine} className="p-5 bg-zinc-50 border border-zinc-200 rounded-xl space-y-4 text-left animate-in fade-in slide-in-from-top-4 duration-200">
+                      <h4 className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-400 border-b border-zinc-200 pb-2">Add New Formulation to Stock</h4>
+                      
+                      {addMedSuccess && (
+                        <div className="bg-emerald-50 text-emerald-800 text-xs p-3 rounded-lg border border-emerald-100 font-sans">
+                          {addMedSuccess}
+                        </div>
+                      )}
+                      
+                      {addMedError && (
+                        <div className="bg-red-50 text-red-700 text-xs p-3 rounded-lg border border-red-100 font-sans">
+                          {addMedError}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Medicine Name</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Paracetamol BP 500mg"
+                            value={newMedName}
+                            onChange={(e) => setNewMedName(e.target.value)}
+                            className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-400"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Price (₦)</label>
+                          <input
+                            type="number"
+                            placeholder="e.g. 1500"
+                            value={newMedPrice}
+                            onChange={(e) => setNewMedPrice(e.target.value)}
+                            className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white font-mono focus:outline-hidden focus:border-zinc-400"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Sickness Severity Category</label>
+                          <select
+                            value={newMedCategory}
+                            onChange={(e: any) => setNewMedCategory(e.target.value)}
+                            className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-400 font-bold"
+                          >
+                            <option value="mild">Mild (OTC, Pain Relievers, vitamins)</option>
+                            <option value="moderate">Moderate (Standard prescriptions, specialized cough syrups)</option>
+                            <option value="severe">Severe (Critical anti-hypertensives, specialized antibiotics)</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Target Symptoms / Indications (Comma-separated)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Fever, Headache, Muscle pain"
+                            value={newMedSymptoms}
+                            onChange={(e) => setNewMedSymptoms(e.target.value)}
+                            className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-400"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Description & Clinical Usage Guidelines</label>
+                          <textarea
+                            placeholder="Enter description, frequency directions, food precautions, etc..."
+                            value={newMedDescription}
+                            onChange={(e) => setNewMedDescription(e.target.value)}
+                            rows={3}
+                            className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-400"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAddMedForm(false);
+                            setAddMedError("");
+                          }}
+                          className="px-4 py-2 border border-zinc-200 hover:bg-zinc-100 text-zinc-600 rounded-lg text-xs font-semibold cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={addingNewMed}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-mono font-bold uppercase tracking-wider cursor-pointer shadow-sm disabled:opacity-55"
+                        >
+                          {addingNewMed ? "Adding formulation..." : "Add to Pharmacy Stock"}
+                        </button>
+                      </div>
+                    </form>
+                  )}
 
                   <div className="overflow-x-auto border border-zinc-100 rounded-xl">
                     <table className="w-full text-left border-collapse">

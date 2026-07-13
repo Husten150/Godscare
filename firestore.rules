@@ -98,7 +98,7 @@ service cloud.firestore {
     // --- Medical Histories Collection ---
     match /medical_histories/{patientId} {
       allow read: if request.auth == null || isOwner(patientId) || isAdmin();
-      allow write: if request.auth == null || isAdmin();
+      allow write: if request.auth == null || isOwner(patientId) || isAdmin();
     }
 
     // --- Medical Bills Collection ---
@@ -113,6 +113,18 @@ service cloud.firestore {
       allow read, list: if request.auth == null || (isSignedIn() && (resource.data.patientId == request.auth.uid || isAdmin()));
       allow create: if request.auth == null || (isSignedIn() && (incoming().patientId == request.auth.uid || isAdmin()));
       allow update, delete: if false;
+    }
+
+    // --- Medicines Collection ---
+    match /medicines/{medicineId} {
+      allow read: if true;
+      allow write: if request.auth == null || isAdmin();
+    }
+
+    // --- System Settings Collection ---
+    match /system_settings/{settingsId} {
+      allow read: if true;
+      allow write: if request.auth == null || isAdmin();
     }
   }
 }
