@@ -554,15 +554,27 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
           medicineName: medicineName || ""
         })
       });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`HTTP ${res.status}: ${errorText || res.statusText}`);
+      }
+
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Invalid response format (expected JSON, got ${contentType}). Server might be misconfigured or offline.`);
+      }
+
       const data = await res.json();
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else {
         alert(data.error || "Failed to initialize secure checkout session.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("[Billing Error]:", err);
-      alert("Unable to reach the secure billing server. Please check your network connection.");
+      alert(`Unable to reach the secure billing server. Detail: ${err.message || "Please check your network connection."}`);
     } finally {
       setPaymentLoading(false);
     }
