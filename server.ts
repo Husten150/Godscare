@@ -115,6 +115,7 @@ app.post("/api/payments/initialize", async (req: express.Request, res: express.R
         email,
         amount: Math.round(amount * 100), // Paystack expects amount in Kobo (Naira cents)
         reference,
+        channels: ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
         callback_url: `${process.env.APP_URL || dynamicAppUrl}/api/payments/verify-callback?userId=${userId}`,
         metadata: {
           userId,
@@ -173,50 +174,460 @@ app.get("/api/payments/simulate-gate", (req: express.Request, res: express.Respo
       <head>
         <title>GodsCareHospital Sandbox Paystack Gateway</title>
         <script src="https://cdn.tailwindcss.com"></script>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-        <style>body { font-family: 'Inter', sans-serif; }</style>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+        <style>
+          body { font-family: 'Inter', sans-serif; }
+          .font-mono-card { font-family: 'JetBrains Mono', monospace; }
+        </style>
       </head>
-      <body class="bg-[#fbfbfc] flex items-center justify-center min-h-screen p-4 text-zinc-800">
-        <div class="max-w-md w-full bg-white rounded-2xl border border-zinc-200 p-8 shadow-md space-y-6">
-          <div class="space-y-2 text-center">
-            <span class="text-[9px] font-mono font-bold uppercase tracking-widest text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-md">Paystack Sandbox Gateway</span>
-            <h1 class="text-xl font-extrabold tracking-tight font-display text-zinc-950">Secure Checkout</h1>
-            <p class="text-xs text-zinc-500">Authorized Payment Gateway for GodsCareHospital</p>
-          </div>
+      <body class="bg-slate-100 flex items-center justify-center min-h-screen p-4 text-zinc-800">
+        <div class="max-w-2xl w-full bg-white rounded-3xl border border-slate-200/80 shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12">
           
-          <div class="bg-zinc-50 border border-zinc-200 rounded-xl p-4 text-xs font-mono space-y-2 text-zinc-700">
-            <p><strong>Customer:</strong> ${email}</p>
-            <p><strong>Payment Type:</strong> <span class="uppercase font-bold text-emerald-600">${paymentType}</span></p>
-            <p><strong>Description:</strong> ${itemDesc}</p>
-            <p><strong>Ref Code:</strong> ${reference}</p>
-            <p class="text-sm pt-1 border-t border-zinc-200"><strong>Amount:</strong> <span class="text-zinc-950 font-extrabold">₦${amount} NGN</span></p>
+          <!-- Left side: Order & Brand Info -->
+          <div class="md:col-span-5 bg-zinc-900 text-white p-6 md:p-8 flex flex-col justify-between space-y-8">
+            <div class="space-y-4">
+              <div class="flex items-center gap-2.5">
+                <span class="text-xs font-mono font-bold uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-md">
+                  Paystack Sandbox
+                </span>
+              </div>
+              <div>
+                <h1 class="text-xl font-extrabold tracking-tight text-white">GodsCare Clinic</h1>
+                <p class="text-xs text-zinc-400 mt-1">Unified Medical Billing Portal</p>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <div class="border-t border-zinc-800 pt-4">
+                <span class="text-[10px] uppercase tracking-wider text-zinc-500 font-bold block mb-1">Customer Email</span>
+                <p class="text-xs font-medium text-zinc-200 truncate">${email}</p>
+              </div>
+
+              <div class="border-t border-zinc-800 pt-4">
+                <span class="text-[10px] uppercase tracking-wider text-zinc-500 font-bold block mb-1">Fee Description</span>
+                <p class="text-xs font-medium text-zinc-300 leading-relaxed">${itemDesc}</p>
+              </div>
+
+              <div class="border-t border-zinc-800 pt-4">
+                <span class="text-[10px] uppercase tracking-wider text-zinc-500 font-bold block mb-1">Transaction Ref</span>
+                <p class="text-[11px] font-mono text-zinc-400 break-all">${reference}</p>
+              </div>
+            </div>
+
+            <div class="border-t border-zinc-800 pt-4">
+              <span class="text-xs text-zinc-500 font-medium block">Total Payable</span>
+              <div class="flex items-baseline gap-1 mt-1 text-emerald-400">
+                <span class="text-2xl font-extrabold tracking-tight">₦${amount}</span>
+                <span class="text-[10px] font-bold font-mono">NGN</span>
+              </div>
+            </div>
           </div>
 
-          <div class="space-y-2">
-            <p class="text-[11px] text-zinc-500 leading-relaxed text-center">
-              This is a secure simulation of the Paystack webhook/callback handshakes. Clicking the verify button completes the transaction in Firestore instantly.
-            </p>
+          <!-- Right side: Payment form and brand selector -->
+          <div class="md:col-span-7 p-6 md:p-8 space-y-6 flex flex-col justify-between bg-[#fbfbfc]">
+            <div>
+              <div class="flex items-center justify-between pb-4 border-b border-zinc-100">
+                <h2 class="text-sm font-extrabold text-zinc-900 tracking-tight">Debit/Credit Card Payment</h2>
+                <div class="flex gap-1">
+                  <!-- Real-time Status -->
+                  <span class="flex h-2 w-2 relative">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span class="text-[10px] font-mono font-bold text-zinc-400">All Card Types Allowed</span>
+                </div>
+              </div>
+
+              <!-- Interactive Card Visualizer -->
+              <div id="cardVisual" class="relative overflow-hidden mt-5 w-full h-44 rounded-2xl bg-gradient-to-br from-zinc-800 to-zinc-950 p-6 text-white shadow-md flex flex-col justify-between transition-all duration-300">
+                <!-- Chip & Contactless Icons -->
+                <div class="flex justify-between items-start">
+                  <!-- Gold Card Chip SVG -->
+                  <svg class="w-10 h-8 text-amber-400/90" fill="currentColor" viewBox="0 0 48 39">
+                    <rect x="2" y="2" width="44" height="35" rx="6" fill="#D4AF37" />
+                    <line x1="2" y1="12" x2="14" y2="12" stroke="#111" stroke-width="1.5" />
+                    <line x1="2" y1="20" x2="14" y2="20" stroke="#111" stroke-width="1.5" />
+                    <line x1="2" y1="28" x2="14" y2="28" stroke="#111" stroke-width="1.5" />
+                    <line x1="34" y1="12" x2="46" y2="12" stroke="#111" stroke-width="1.5" />
+                    <line x1="34" y1="20" x2="46" y2="20" stroke="#111" stroke-width="1.5" />
+                    <line x1="34" y1="28" x2="46" y2="28" stroke="#111" stroke-width="1.5" />
+                    <rect x="14" y="6" width="20" height="27" fill="none" stroke="#111" stroke-width="1.5" />
+                    <line x1="14" y1="16" x2="34" y2="16" stroke="#111" stroke-width="1.5" />
+                    <line x1="14" y1="24" x2="34" y2="24" stroke="#111" stroke-width="1.5" />
+                  </svg>
+
+                  <!-- Card Brand Indicator SVG/Text -->
+                  <div id="cardBrandLogo" class="font-bold font-mono tracking-wider text-xs px-2.5 py-1.5 rounded bg-white/10 text-white backdrop-blur-xs">
+                    Generic Card
+                  </div>
+                </div>
+
+                <!-- Card Number -->
+                <div id="cardNumberDisplay" class="font-mono-card text-lg md:text-xl font-bold tracking-[0.2em] text-white/90">
+                  •••• •••• •••• ••••
+                </div>
+
+                <!-- Footer with Holder Name & Expiry -->
+                <div class="flex justify-between text-[11px] font-mono text-white/70 uppercase">
+                  <div>
+                    <span class="text-[8px] text-white/40 block">Card Holder</span>
+                    <span id="cardHolderDisplay" class="font-medium tracking-wider">Patient Name</span>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-[8px] text-white/40 block">Expires</span>
+                    <span id="cardExpiryDisplay" class="font-medium">MM/YY</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Quick Demo Card Selectors -->
+              <div class="mt-4 space-y-2">
+                <span class="text-[10px] uppercase tracking-wider font-bold text-zinc-400">Pre-fill Supported Cards (Multi-Bank Simulation)</span>
+                <div class="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+                  <button type="button" onclick="fillCard('Verve')" class="px-2 py-1.5 border border-zinc-200 rounded-lg text-[10px] font-bold text-zinc-600 bg-white hover:bg-zinc-50 hover:border-zinc-300 transition text-center truncate cursor-pointer">
+                    Verve (NGA)
+                  </button>
+                  <button type="button" onclick="fillCard('Visa')" class="px-2 py-1.5 border border-zinc-200 rounded-lg text-[10px] font-bold text-zinc-600 bg-white hover:bg-zinc-50 hover:border-zinc-300 transition text-center truncate cursor-pointer">
+                    Visa
+                  </button>
+                  <button type="button" onclick="fillCard('Mastercard')" class="px-2 py-1.5 border border-zinc-200 rounded-lg text-[10px] font-bold text-zinc-600 bg-white hover:bg-zinc-50 hover:border-zinc-300 transition text-center truncate cursor-pointer">
+                    Mastercard
+                  </button>
+                  <button type="button" onclick="fillCard('Amex')" class="px-2 py-1.5 border border-zinc-200 rounded-lg text-[10px] font-bold text-zinc-600 bg-white hover:bg-zinc-50 hover:border-zinc-300 transition text-center truncate cursor-pointer">
+                    Amex
+                  </button>
+                  <button type="button" onclick="fillCard('Discover')" class="px-2 py-1.5 border border-zinc-200 rounded-lg text-[10px] font-bold text-zinc-600 bg-white hover:bg-zinc-50 hover:border-zinc-300 transition text-center truncate cursor-pointer">
+                    Discover
+                  </button>
+                  <button type="button" onclick="fillCard('JCB')" class="px-2 py-1.5 border border-zinc-200 rounded-lg text-[10px] font-bold text-zinc-600 bg-white hover:bg-zinc-50 hover:border-zinc-300 transition text-center truncate cursor-pointer">
+                    JCB
+                  </button>
+                  <button type="button" onclick="fillCard('Diners')" class="px-2 py-1.5 border border-zinc-200 rounded-lg text-[10px] font-bold text-zinc-600 bg-white hover:bg-zinc-50 hover:border-zinc-300 transition text-center truncate cursor-pointer">
+                    Diners Club
+                  </button>
+                  <button type="button" onclick="fillCard('UnionPay')" class="px-2 py-1.5 border border-zinc-200 rounded-lg text-[10px] font-bold text-zinc-600 bg-white hover:bg-zinc-50 hover:border-zinc-300 transition text-center truncate cursor-pointer">
+                    UnionPay
+                  </button>
+                </div>
+              </div>
+
+              <!-- Main Interactive Input Form -->
+              <div class="mt-5 space-y-3.5">
+                <div>
+                  <label class="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Card Number</label>
+                  <div class="relative mt-1">
+                    <input 
+                      type="text" 
+                      id="cardNumber" 
+                      placeholder="5061 •••• •••• ••••" 
+                      maxlength="19"
+                      class="w-full px-4 py-2.5 bg-white border border-zinc-200 focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 rounded-xl text-sm font-mono tracking-wider outline-none transition"
+                    />
+                    <div id="cardBrandIcon" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400"></div>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Cardholder Name</label>
+                  <input 
+                    type="text" 
+                    id="cardHolder" 
+                    placeholder="e.g. Dr. Elizabeth Vance" 
+                    class="w-full mt-1 px-4 py-2.5 bg-white border border-zinc-200 focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 rounded-xl text-sm outline-none transition"
+                  />
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <label class="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Expiration Date</label>
+                    <input 
+                      type="text" 
+                      id="cardExpiry" 
+                      placeholder="MM/YY" 
+                      maxlength="5"
+                      class="w-full mt-1 px-4 py-2.5 bg-white border border-zinc-200 focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 rounded-xl text-sm outline-none transition text-center font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label class="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Security Code (CVV)</label>
+                    <input 
+                      type="password" 
+                      id="cardCvv" 
+                      placeholder="•••" 
+                      maxlength="4"
+                      class="w-full mt-1 px-4 py-2.5 bg-white border border-zinc-200 focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 rounded-xl text-sm outline-none transition text-center font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- PIN/OTP Authorization Step Modal (Simulated) -->
+            <div id="pinModal" class="hidden fixed inset-0 bg-zinc-950/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div class="max-w-xs w-full bg-white rounded-2xl border border-zinc-200 p-6 shadow-xl space-y-4">
+                <div class="text-center space-y-1">
+                  <h3 class="text-sm font-extrabold text-zinc-950">Enter Card PIN</h3>
+                  <p class="text-[11px] text-zinc-500">Authorize your secure transaction with your card security PIN</p>
+                </div>
+                <div class="flex justify-center gap-2">
+                  <input type="password" maxlength="1" class="pin-box w-10 h-12 border border-zinc-200 focus:border-zinc-900 rounded-lg text-center font-bold text-lg outline-none" />
+                  <input type="password" maxlength="1" class="pin-box w-10 h-12 border border-zinc-200 focus:border-zinc-900 rounded-lg text-center font-bold text-lg outline-none" />
+                  <input type="password" maxlength="1" class="pin-box w-10 h-12 border border-zinc-200 focus:border-zinc-900 rounded-lg text-center font-bold text-lg outline-none" />
+                  <input type="password" maxlength="1" class="pin-box w-10 h-12 border border-zinc-200 focus:border-zinc-900 rounded-lg text-center font-bold text-lg outline-none" />
+                </div>
+                <div class="flex gap-2">
+                  <button type="button" onclick="closePinModal()" class="w-1/2 py-2 text-xs border border-zinc-200 rounded-lg text-zinc-500 font-medium hover:bg-zinc-50 cursor-pointer">Cancel</button>
+                  <button type="button" onclick="submitAuthorizedPayment()" class="w-1/2 py-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer">Verify & Pay</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer: actions -->
+            <div class="space-y-2 mt-6">
+              <button 
+                id="confirmBtn"
+                class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-emerald-600/10"
+              >
+                Simulate Secure Card Payment
+              </button>
+              <a 
+                href="/"
+                class="block w-full py-2.5 text-center border border-zinc-200 text-zinc-500 rounded-xl text-xs font-mono uppercase tracking-wider hover:bg-zinc-50 transition"
+              >
+                Cancel Transaction
+              </a>
+            </div>
           </div>
 
-          <div class="space-y-2.5">
-            <button 
-              id="confirmBtn"
-              class="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
-            >
-              Verify Sandbox Payment
-            </button>
-            <a 
-              href="/"
-              class="block w-full py-2.5 text-center border border-zinc-200 text-zinc-500 rounded-lg text-xs font-mono uppercase tracking-wider hover:bg-slate-50"
-            >
-              Cancel Transaction
-            </a>
-          </div>
         </div>
-        
+
         <script>
-          document.getElementById('confirmBtn').addEventListener('click', async () => {
-            document.getElementById('confirmBtn').innerText = 'Processing with Firestore...';
+          // Pre-defined multi-banking cards representing various card types and brands
+          const TEST_CARDS = {
+            'Verve': {
+              number: '5061 0422 9384 1029',
+              holder: 'Ngozi Adebayo',
+              expiry: '12/28',
+              cvv: '931',
+              gradient: 'from-emerald-700 to-teal-900',
+              brand: 'Verve'
+            },
+            'Visa': {
+              number: '4111 2222 3333 4444',
+              holder: 'Dr. Elizabeth Vance',
+              expiry: '08/29',
+              cvv: '123',
+              gradient: 'from-blue-600 to-indigo-900',
+              brand: 'Visa'
+            },
+            'Mastercard': {
+              number: '5543 2190 8765 4321',
+              holder: 'James Thorne',
+              expiry: '10/27',
+              cvv: '456',
+              gradient: 'from-rose-600 to-orange-900',
+              brand: 'Mastercard'
+            },
+            'Amex': {
+              number: '3782 822463 10005',
+              holder: 'Marcus Sterling',
+              expiry: '05/30',
+              cvv: '8834',
+              gradient: 'from-zinc-700 to-slate-900',
+              brand: 'Amex'
+            },
+            'Discover': {
+              number: '6011 2345 6789 0123',
+              holder: 'Chloe Patel',
+              expiry: '11/28',
+              cvv: '702',
+              gradient: 'from-orange-500 to-red-800',
+              brand: 'Discover'
+            },
+            'JCB': {
+              number: '3528 1234 5678 9012',
+              holder: 'Yuki Kenji',
+              expiry: '09/27',
+              cvv: '493',
+              gradient: 'from-cyan-700 to-sky-900',
+              brand: 'JCB'
+            },
+            'Diners': {
+              number: '3612 345678 9012',
+              holder: 'Alistair Vance',
+              expiry: '04/28',
+              cvv: '293',
+              gradient: 'from-slate-600 to-neutral-800',
+              brand: 'Diners Club'
+            },
+            'UnionPay': {
+              number: '6210 9876 5432 1098',
+              holder: 'Han Wei',
+              expiry: '03/30',
+              cvv: '811',
+              gradient: 'from-red-700 to-rose-950',
+              brand: 'UnionPay'
+            }
+          };
+
+          // Card brand detection by prefix matching
+          function detectCardBrand(num) {
+            const clean = num.replace(/\\D/g, '');
+            if (/^4/.test(clean)) return 'Visa';
+            if (/^(5[1-5]|222[1-9]|22[3-9]|2[3-6]|27[0-1]|2720)/.test(clean)) return 'Mastercard';
+            if (/^(506[0-1]|507[8-9]|6500)/.test(clean)) return 'Verve';
+            if (/^3[47]/.test(clean)) return 'Amex';
+            if (/^(6011|65|64[4-9])/.test(clean)) return 'Discover';
+            if (/^35[2-8]/.test(clean)) return 'JCB';
+            if (/^(30[0-5]|36|38|39)/.test(clean)) return 'Diners';
+            if (/^62/.test(clean)) return 'UnionPay';
+            return 'Generic Card';
+          }
+
+          function getBrandGradient(brand) {
+            switch(brand) {
+              case 'Visa': return 'from-blue-600 to-indigo-900';
+              case 'Mastercard': return 'from-rose-600 to-orange-900';
+              case 'Verve': return 'from-emerald-700 to-teal-900';
+              case 'Amex': return 'from-zinc-700 to-slate-900';
+              case 'Discover': return 'from-orange-500 to-red-800';
+              case 'JCB': return 'from-cyan-700 to-sky-900';
+              case 'Diners': return 'from-slate-600 to-neutral-800';
+              case 'UnionPay': return 'from-red-700 to-rose-950';
+              default: return 'from-zinc-800 to-zinc-950';
+            }
+          }
+
+          // Format inputs in real-time
+          const cardNumberInput = document.getElementById('cardNumber');
+          const cardHolderInput = document.getElementById('cardHolder');
+          const cardExpiryInput = document.getElementById('cardExpiry');
+          const cardCvvInput = document.getElementById('cardCvv');
+
+          cardNumberInput.addEventListener('input', (e) => {
+            let val = e.target.value.replace(/\\s+/g, '').replace(/[^0-9]/gi, '');
+            let formatted = '';
+            
+            const brand = detectCardBrand(val);
+            
+            // Format card number with spaces depending on brand (e.g. Amex uses 4-6-5)
+            if (brand === 'Amex') {
+              const parts = [val.slice(0, 4), val.slice(4, 10), val.slice(10, 15)];
+              formatted = parts.filter(p => p).join(' ');
+            } else {
+              const parts = [];
+              for (let i = 0; i < val.length; i += 4) {
+                parts.push(val.slice(i, i + 4));
+              }
+              formatted = parts.join(' ');
+            }
+            e.target.value = formatted;
+
+            // Update visual card
+            const numDisp = document.getElementById('cardNumberDisplay');
+            numDisp.innerText = formatted || '•••• •••• •••• ••••';
+
+            // Brand indicator update
+            const brandLogo = document.getElementById('cardBrandLogo');
+            brandLogo.innerText = brand;
+            
+            // Icon
+            const brandIcon = document.getElementById('cardBrandIcon');
+            brandIcon.innerText = brand !== 'Generic Card' ? '💳 ' + brand : '';
+
+            // Update card gradient color
+            const cardVisual = document.getElementById('cardVisual');
+            cardVisual.className = 'relative overflow-hidden mt-5 w-full h-44 rounded-2xl bg-gradient-to-br ' + getBrandGradient(brand) + ' p-6 text-white shadow-md flex flex-col justify-between transition-all duration-300';
+          });
+
+          cardHolderInput.addEventListener('input', (e) => {
+            document.getElementById('cardHolderDisplay').innerText = e.target.value || 'Patient Name';
+          });
+
+          cardExpiryInput.addEventListener('input', (e) => {
+            let val = e.target.value.replace(/\\D/g, '');
+            if (val.length > 2) {
+              val = val.slice(0, 2) + '/' + val.slice(2, 4);
+            }
+            e.target.value = val;
+            document.getElementById('cardExpiryDisplay').innerText = val || 'MM/YY';
+          });
+
+          // Pre-fill quick helper
+          window.fillCard = function(brand) {
+            const card = TEST_CARDS[brand];
+            if (!card) return;
+
+            cardNumberInput.value = card.number;
+            cardHolderInput.value = card.holder;
+            cardExpiryInput.value = card.expiry;
+            cardCvvInput.value = card.cvv;
+
+            // Trigger visual updates manually
+            document.getElementById('cardNumberDisplay').innerText = card.number;
+            document.getElementById('cardHolderDisplay').innerText = card.holder;
+            document.getElementById('cardExpiryDisplay').innerText = card.expiry;
+            document.getElementById('cardBrandLogo').innerText = card.brand;
+            document.getElementById('cardBrandIcon').innerText = '💳 ' + card.brand;
+
+            const cardVisual = document.getElementById('cardVisual');
+            cardVisual.className = 'relative overflow-hidden mt-5 w-full h-44 rounded-2xl bg-gradient-to-br ' + card.gradient + ' p-6 text-white shadow-md flex flex-col justify-between transition-all duration-300';
+          };
+
+          // PIN Pad Auto Focus
+          const pinBoxes = document.querySelectorAll('.pin-box');
+          pinBoxes.forEach((box, idx) => {
+            box.addEventListener('input', (e) => {
+              if (e.target.value && idx < pinBoxes.length - 1) {
+                pinBoxes[idx + 1].focus();
+              }
+            });
+            box.addEventListener('keydown', (e) => {
+              if (e.key === 'Backspace' && !e.target.value && idx > 0) {
+                pinBoxes[idx - 1].focus();
+              }
+            });
+          });
+
+          // Confirm Payment triggers modal
+          document.getElementById('confirmBtn').addEventListener('click', () => {
+            // Validate basic values
+            if (!cardNumberInput.value || cardNumberInput.value.length < 12) {
+              alert('Please enter a valid card number.');
+              cardNumberInput.focus();
+              return;
+            }
+            if (!cardHolderInput.value) {
+              alert('Please enter the cardholder name.');
+              cardHolderInput.focus();
+              return;
+            }
+            if (!cardExpiryInput.value || cardExpiryInput.value.length < 5) {
+              alert('Please enter a valid expiration date (MM/YY).');
+              cardExpiryInput.focus();
+              return;
+            }
+            if (!cardCvvInput.value || cardCvvInput.value.length < 3) {
+              alert('Please enter a valid CVV.');
+              cardCvvInput.focus();
+              return;
+            }
+
+            // Open simulated bank authorization PIN modal
+            document.getElementById('pinModal').classList.remove('hidden');
+            pinBoxes[0].focus();
+          });
+
+          window.closePinModal = function() {
+            document.getElementById('pinModal').classList.add('hidden');
+          };
+
+          window.submitAuthorizedPayment = async function() {
+            closePinModal();
+            const btn = document.getElementById('confirmBtn');
+            btn.innerText = 'Authorizing card transaction...';
+            btn.disabled = true;
+
             try {
               const res = await fetch('/api/payments/verify', {
                 method: 'POST',
@@ -233,15 +644,24 @@ app.get("/api/payments/simulate-gate", (req: express.Request, res: express.Respo
               });
               const result = await res.json();
               if (result.status === 'success') {
-                alert('Payment successfully verified! GodsCareHospital has processed your payment.');
-                window.location.href = '/';
+                btn.innerText = 'Card Approved! Redirecting...';
+                setTimeout(() => {
+                  window.location.href = '/?payment=success&type=${paymentType}&message=Authorized';
+                }, 1000);
               } else {
+                btn.innerText = 'Card Payment Failed';
+                btn.disabled = false;
                 alert('Verification failed: ' + result.error);
               }
             } catch (err) {
+              btn.innerText = 'Payment Error';
+              btn.disabled = false;
               alert('Error verifying payment: ' + err.message);
             }
-          });
+          };
+
+          // Initialize with default Verve Card selection representation
+          fillCard('Verve');
         </script>
       </body>
     </html>
