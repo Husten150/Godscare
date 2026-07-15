@@ -1,4 +1,5 @@
 import React from "react";
+import { getApiUrl } from "../config";
 import { 
   HeartPulse, 
   Activity, 
@@ -351,7 +352,7 @@ export default function Home({ setCurrentView, userLoggedIn }: HomeProps) {
             }
 
             try {
-              const res = await fetch("/api/feedback", {
+              const res = await fetch(getApiUrl("/api/feedback"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name, email, subject, message })

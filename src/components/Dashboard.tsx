@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { UserProfile, Doctor, Appointment, Report, AppointmentStatus, MedicalHistory, PastVisit, CarePlan, PaymentLog } from "../types";
+import { getApiUrl } from "../config";
 import { 
   Calendar, 
   Clock, 
@@ -196,7 +197,7 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
 
       // 6. Load medical bills
       try {
-        const billsRes = await fetch(`/api/patients/${userProfile.uid}/bills`);
+        const billsRes = await fetch(getApiUrl(`/api/patients/${userProfile.uid}/bills`));
         if (billsRes.ok) {
           const billsData = await billsRes.json();
           setMedicalBills(billsData);
@@ -207,7 +208,7 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
 
       // 7. Load medicines catalog
       try {
-        const medicinesRes = await fetch("/api/medicines");
+        const medicinesRes = await fetch(getApiUrl("/api/medicines"));
         if (medicinesRes.ok) {
           const medsData = await medicinesRes.json();
           setMedicines(medsData);
@@ -218,7 +219,7 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
 
       // 8. Load medicine purchases history
       try {
-        const purchasesRes = await fetch(`/api/patients/${userProfile.uid}/medicine-purchases`);
+        const purchasesRes = await fetch(getApiUrl(`/api/patients/${userProfile.uid}/medicine-purchases`));
         if (purchasesRes.ok) {
           const purchasesData = await purchasesRes.json();
           setMedicinePurchases(purchasesData);
@@ -242,7 +243,7 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
 
       // 9. Load dynamic fees from system settings
       try {
-        const feesRes = await fetch("/api/settings/fees");
+        const feesRes = await fetch(getApiUrl("/api/settings/fees"));
         if (feesRes.ok) {
           const feesData = await feesRes.json();
           if (feesData.appointmentBookingFee) setBookingFee(feesData.appointmentBookingFee);
@@ -542,7 +543,7 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
     if (paymentLoading) return;
     setPaymentLoading(true);
     try {
-      const res = await fetch("/api/payments/initialize", {
+      const res = await fetch(getApiUrl("/api/payments/initialize"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -602,7 +603,7 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
         parts: [{ text: msg.text }]
       }));
 
-      const res = await fetch("/api/gemini/agent", {
+      const res = await fetch(getApiUrl("/api/gemini/agent"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

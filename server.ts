@@ -37,6 +37,18 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// Enable CORS for all incoming requests (e.g., from Vercel deployments)
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  if (req.method === "OPTIONS") {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+
 // Load Firebase configuration from applet config JSON
 let firebaseApp;
 let db: any;

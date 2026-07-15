@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { Doctor, Appointment, Report, UserProfile, AppointmentStatus, MedicalHistory, PastVisit } from "../types";
+import { getApiUrl } from "../config";
 import { 
   Users, 
   Calendar, 
@@ -169,7 +170,7 @@ export default function AdminPanel() {
 
       // 5. Load medicines
       try {
-        const medRes = await fetch("/api/medicines");
+        const medRes = await fetch(getApiUrl("/api/medicines"));
         if (medRes.ok) {
           const medData = await medRes.json();
           setAdminMedicines(medData);
@@ -180,7 +181,7 @@ export default function AdminPanel() {
 
       // 6. Load settings/fees
       try {
-        const feesRes = await fetch("/api/settings/fees");
+        const feesRes = await fetch(getApiUrl("/api/settings/fees"));
         if (feesRes.ok) {
           const feesData = await feesRes.json();
           if (feesData.appointmentBookingFee) setAdminBookingFee(feesData.appointmentBookingFee);
@@ -192,7 +193,7 @@ export default function AdminPanel() {
 
       // 7. Load client feedbacks
       try {
-        const feedbacksRes = await fetch("/api/feedbacks");
+        const feedbacksRes = await fetch(getApiUrl("/api/feedbacks"));
         if (feedbacksRes.ok) {
           const feedbacksData = await feedbacksRes.json();
           setFeedbacksList(feedbacksData);
@@ -414,7 +415,7 @@ export default function AdminPanel() {
     setUpdatingFees(true);
     setFeesSuccess("");
     try {
-      const res = await fetch("/api/settings/fees/update", {
+      const res = await fetch(getApiUrl("/api/settings/fees/update"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -443,7 +444,7 @@ export default function AdminPanel() {
     if (!editingMedicineId) return;
     setUpdatingMedicine(true);
     try {
-      const res = await fetch(`/api/medicines/${editingMedicineId}/update`, {
+      const res = await fetch(getApiUrl(`/api/medicines/${editingMedicineId}/update`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -483,7 +484,7 @@ export default function AdminPanel() {
 
     try {
       setAddingNewMed(true);
-      const res = await fetch("/api/medicines/add", {
+      const res = await fetch(getApiUrl("/api/medicines/add"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -534,7 +535,7 @@ export default function AdminPanel() {
     setBillError("");
     setBillSuccess("");
     try {
-      const res = await fetch(`/api/patients/${uid}/bills`);
+      const res = await fetch(getApiUrl(`/api/patients/${uid}/bills`));
       if (res.ok) {
         const data = await res.json();
         setSelectedPatientBills(data);
