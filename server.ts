@@ -3,7 +3,6 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import { initializeApp } from "firebase/app";
 import { 
@@ -1852,6 +1851,7 @@ async function startServer() {
   await seedDoctorsCollection();
 
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -1867,9 +1867,13 @@ async function startServer() {
     console.log("[Server] Production static files serving activated.");
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Server] Godscare full-stack environment listening at http://localhost:${PORT}`);
-  });
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`[Server] Godscare full-stack environment listening at http://localhost:${PORT}`);
+    });
+  } else {
+    console.log("[Server] Running as a serverless function on Vercel. Port listener bypassed.");
+  }
 }
 
 startServer();

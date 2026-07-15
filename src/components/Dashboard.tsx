@@ -649,6 +649,17 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
       }
     } catch (err: any) {
       console.warn("[Billing Error]: Active self-healing local ledger fallback initiated due to:", err);
+      const errMsg = err?.message || "";
+      if (errMsg.includes("Paystack live billing gateway is not configured") || errMsg.includes("PAYSTACK_SECRET_KEY")) {
+        alert(
+          "Paystack Key Missing on Vercel:\n\n" +
+          "Your Vercel environment is live, but the PAYSTACK_SECRET_KEY environment variable is not configured on your Vercel Dashboard.\n\n" +
+          "Please log into your Vercel account, go to your project Settings > Environment Variables, and add 'PAYSTACK_SECRET_KEY' with your Paystack Secret Key to enable live payments."
+        );
+        setPaymentLoading(false);
+        return;
+      }
+      
       // Trigger direct client-side billing modal fallback
       setLocalPaymentData({
         paymentType,
