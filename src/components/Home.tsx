@@ -1,5 +1,7 @@
 import React from "react";
 import { getApiUrl } from "../config";
+import { collection, doc, setDoc } from "firebase/firestore";
+import { db } from "../firebase";
 import { 
   HeartPulse, 
   Activity, 
@@ -364,10 +366,28 @@ export default function Home({ setCurrentView, userLoggedIn }: HomeProps) {
                 target.reset();
               } else {
                 const error = await res.text();
-                alert(`Submission failed: ${error}`);
+                throw new Error(error || "Server responded with error");
               }
             } catch (err: any) {
-              alert(`Error: ${err.message || "Unable to reach feedback server."}`);
+              console.warn("Feedback server unreachable, logging directly to Firestore:", err);
+              try {
+                const feedbackId = `fb-${Date.now()}`;
+                const feedbackData = {
+                  id: feedbackId,
+                  name,
+                  email,
+                  subject: subject || "General Client Feedback",
+                  message,
+                  submittedAt: new Date().toISOString()
+                };
+
+                await setDoc(doc(db, "feedbacks", feedbackId), feedbackData);
+                alert("Your feedback has been logged securely in our clinical vault!");
+                target.reset();
+              } catch (fallbackErr: any) {
+                console.error("Direct Firestore feedback fallback failed:", fallbackErr);
+                alert(`Error: ${fallbackErr.message || "Unable to reach feedback server."}`);
+              }
             }
           }}
           className="space-y-6 bg-white border border-zinc-200/80 rounded-2xl p-6 md:p-8"

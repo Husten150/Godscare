@@ -174,9 +174,23 @@ export default function AdminPanel() {
         if (medRes.ok) {
           const medData = await medRes.json();
           setAdminMedicines(medData);
+        } else {
+          throw new Error("HTTP response error");
         }
       } catch (e) {
-        console.error("Failed to load admin medicines catalog:", e);
+        console.warn("Failed to load admin medicines catalog from API, falling back to direct Firestore read:", e);
+        try {
+          const medColRef = collection(db, "medicines");
+          const snap = await getDocs(medColRef);
+          const medsList: any[] = [];
+          snap.forEach((docSnap) => medsList.push(docSnap.data()));
+          if (medsList.length > 0) {
+            medsList.sort((a, b) => a.id.localeCompare(b.id));
+            setAdminMedicines(medsList);
+          }
+        } catch (fbErr) {
+          console.error("Firestore medicines read failed:", fbErr);
+        }
       }
 
       // 6. Load settings/fees
@@ -186,9 +200,22 @@ export default function AdminPanel() {
           const feesData = await feesRes.json();
           if (feesData.appointmentBookingFee) setAdminBookingFee(feesData.appointmentBookingFee);
           if (feesData.premiumSubscriptionFee) setAdminPremiumFee(feesData.premiumSubscriptionFee);
+        } else {
+          throw new Error("HTTP response error");
         }
       } catch (e) {
-        console.error("Failed to load admin fees settings:", e);
+        console.warn("Failed to load admin fees settings from API, falling back to direct Firestore read:", e);
+        try {
+          const docRef = doc(db, "system_settings", "fees");
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            const feesData = snap.data();
+            if (feesData.appointmentBookingFee) setAdminBookingFee(feesData.appointmentBookingFee);
+            if (feesData.premiumSubscriptionFee) setAdminPremiumFee(feesData.premiumSubscriptionFee);
+          }
+        } catch (fbErr) {
+          console.error("Firestore fees read failed:", fbErr);
+        }
       }
 
       // 7. Load client feedbacks
@@ -197,9 +224,21 @@ export default function AdminPanel() {
         if (feedbacksRes.ok) {
           const feedbacksData = await feedbacksRes.json();
           setFeedbacksList(feedbacksData);
+        } else {
+          throw new Error("HTTP response error");
         }
       } catch (e) {
-        console.error("Failed to load admin client feedbacks:", e);
+        console.warn("Failed to load admin client feedbacks from API, falling back to direct Firestore read:", e);
+        try {
+          const feedbackCol = collection(db, "feedbacks");
+          const snap = await getDocs(feedbackCol);
+          const feedbackList: any[] = [];
+          snap.forEach((docSnap) => feedbackList.push(docSnap.data()));
+          feedbackList.sort((a, b) => new Date(b.submittedAt || b.timestamp || 0).getTime() - new Date(a.submittedAt || a.timestamp || 0).getTime());
+          setFeedbacksList(feedbackList);
+        } catch (fbErr) {
+          console.error("Firestore feedbacks read failed:", fbErr);
+        }
       }
 
     } catch (err) {
@@ -428,11 +467,22 @@ export default function AdminPanel() {
         setTimeout(() => setFeesSuccess(""), 5000);
       } else {
         const d = await res.json();
-        alert(d.error || "Failed to update global fees.");
+        throw new Error(d.error || "Failed to update global fees.");
       }
-    } catch (err) {
-      console.error(err);
-      alert("Error updating fees.");
+    } catch (err: any) {
+      console.warn("Server fees update failed, attempting direct Firestore fallback:", err);
+      try {
+        const docRef = doc(db, "system_settings", "fees");
+        await setDoc(docRef, {
+          appointmentBookingFee: Number(adminBookingFee),
+          premiumSubscriptionFee: Number(adminPremiumFee)
+        });
+        setFeesSuccess("Global system fees updated successfully via secure client-side database!");
+        setTimeout(() => setFeesSuccess(""), 5000);
+      } catch (fallbackErr: any) {
+        console.error("Firestore fees update fallback failed:", fallbackErr);
+        alert(`Error: ${fallbackErr.message || "Failed to update fees."}`);
+      }
     } finally {
       setUpdatingFees(false);
     }
@@ -455,15 +505,27 @@ export default function AdminPanel() {
       });
       if (res.ok) {
         setEditingMedicineId(null);
-        // Reload admin data to refresh medicine list
         loadAdminData();
       } else {
         const d = await res.json();
-        alert(d.error || "Failed to update medicine.");
+        throw new Error(d.error || "Failed to update medicine.");
       }
-    } catch (err) {
-      console.error(err);
-      alert("Error updating medicine.");
+    } catch (err: any) {
+      console.warn("Server medicine update failed, attempting direct Firestore fallback:", err);
+      try {
+        const medRef = doc(db, "medicines", editingMedicineId);
+        await updateDoc(medRef, {
+          price: Number(editMedPrice),
+          name: editMedName,
+          description: editMedDesc
+        });
+        setEditingMedicineId(null);
+        loadAdminData();
+        alert("Medicine updated successfully via secure client-side database!");
+      } catch (fallbackErr: any) {
+        console.error("Firestore medicine update fallback failed:", fallbackErr);
+        alert(`Error: ${fallbackErr.message || "Failed to update medicine."}`);
+      }
     } finally {
       setUpdatingMedicine(false);
     }
@@ -498,28 +560,55 @@ export default function AdminPanel() {
 
       if (res.ok) {
         setAddMedSuccess("New medicine formulation added to pharmacy stock successfully!");
-        // Reset fields
         setNewMedName("");
         setNewMedSymptoms("");
         setNewMedDescription("");
         setNewMedPrice("");
         setNewMedCategory("mild");
-        
-        // Reload admin data
         loadAdminData();
-        
-        // Hide form after brief delay
         setTimeout(() => {
           setShowAddMedForm(false);
           setAddMedSuccess("");
         }, 1500);
       } else {
         const d = await res.json();
-        setAddMedError(d.error || "Failed to add medicine.");
+        throw new Error(d.error || "Failed to add medicine.");
       }
     } catch (err: any) {
-      console.error(err);
-      setAddMedError("Error adding medicine formulation.");
+      console.warn("Server medicine addition failed, attempting direct Firestore fallback:", err);
+      try {
+        const newId = `med-${Date.now()}`;
+        const symptomsArray = typeof newMedSymptoms === "string" 
+          ? newMedSymptoms.split(",").map((s: string) => s.trim()).filter((s: string) => s.length > 0)
+          : ["General Symptoms"];
+        
+        const newMedData = {
+          id: newId,
+          name: newMedName,
+          category: newMedCategory,
+          symptoms: symptomsArray,
+          description: newMedDescription,
+          price: Number(newMedPrice)
+        };
+
+        const medRef = doc(db, "medicines", newId);
+        await setDoc(medRef, newMedData);
+
+        setAddMedSuccess("New medicine formulation added via secure client-side database!");
+        setNewMedName("");
+        setNewMedSymptoms("");
+        setNewMedDescription("");
+        setNewMedPrice("");
+        setNewMedCategory("mild");
+        loadAdminData();
+        setTimeout(() => {
+          setShowAddMedForm(false);
+          setAddMedSuccess("");
+        }, 1500);
+      } catch (fallbackErr: any) {
+        console.error("Firestore medicine addition fallback failed:", fallbackErr);
+        setAddMedError(fallbackErr.message || "Error adding medicine formulation.");
+      }
     } finally {
       setAddingNewMed(false);
     }

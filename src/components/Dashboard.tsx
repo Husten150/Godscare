@@ -201,9 +201,23 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
         if (billsRes.ok) {
           const billsData = await billsRes.json();
           setMedicalBills(billsData);
+        } else {
+          throw new Error("HTTP response error");
         }
       } catch (e) {
-        console.error("Error loading bills:", e);
+        console.warn("Failed to load medical bills via API, attempting direct Firestore fallback:", e);
+        try {
+          const billsCol = collection(db, "medical_bills");
+          const snap = await getDocs(query(billsCol, where("patientId", "==", userProfile.uid)));
+          const billsList: any[] = [];
+          snap.forEach((docSnap) => {
+            billsList.push(docSnap.data());
+          });
+          billsList.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+          setMedicalBills(billsList);
+        } catch (fallbackErr) {
+          console.error("Firestore billing read fallback failed:", fallbackErr);
+        }
       }
 
       // 7. Load medicines catalog
@@ -212,9 +226,25 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
         if (medicinesRes.ok) {
           const medsData = await medicinesRes.json();
           setMedicines(medsData);
+        } else {
+          throw new Error("HTTP response error");
         }
       } catch (e) {
-        console.error("Error loading medicines catalog:", e);
+        console.warn("Failed to load medicines catalog via API, attempting direct Firestore fallback:", e);
+        try {
+          const medsCol = collection(db, "medicines");
+          const snap = await getDocs(medsCol);
+          const medsList: any[] = [];
+          snap.forEach((docSnap) => {
+            medsList.push(docSnap.data());
+          });
+          if (medsList.length > 0) {
+            medsList.sort((a, b) => (a.id || "").localeCompare(b.id || ""));
+            setMedicines(medsList);
+          }
+        } catch (fallbackErr) {
+          console.error("Firestore medicines read fallback failed:", fallbackErr);
+        }
       }
 
       // 8. Load medicine purchases history
@@ -223,9 +253,23 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
         if (purchasesRes.ok) {
           const purchasesData = await purchasesRes.json();
           setMedicinePurchases(purchasesData);
+        } else {
+          throw new Error("HTTP response error");
         }
       } catch (e) {
-        console.error("Error loading medicine purchases:", e);
+        console.warn("Failed to load medicine purchases via API, attempting direct Firestore fallback:", e);
+        try {
+          const purchasesCol = collection(db, "medicine_purchases");
+          const snap = await getDocs(query(purchasesCol, where("patientId", "==", userProfile.uid)));
+          const purchasesList: any[] = [];
+          snap.forEach((docSnap) => {
+            purchasesList.push(docSnap.data());
+          });
+          purchasesList.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+          setMedicinePurchases(purchasesList);
+        } catch (fallbackErr) {
+          console.error("Firestore medicine purchases fallback failed:", fallbackErr);
+        }
       }
 
       // 8.5. Load payments/receipts history
@@ -248,9 +292,22 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
           const feesData = await feesRes.json();
           if (feesData.appointmentBookingFee) setBookingFee(feesData.appointmentBookingFee);
           if (feesData.premiumSubscriptionFee) setPremiumFee(feesData.premiumSubscriptionFee);
+        } else {
+          throw new Error("HTTP response error");
         }
       } catch (e) {
-        console.error("Error loading dynamic system fees:", e);
+        console.warn("Failed to load settings/fees via API, attempting direct Firestore fallback:", e);
+        try {
+          const docRef = doc(db, "system_settings", "fees");
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            const feesData = snap.data();
+            if (feesData.appointmentBookingFee) setBookingFee(feesData.appointmentBookingFee);
+            if (feesData.premiumSubscriptionFee) setPremiumFee(feesData.premiumSubscriptionFee);
+          }
+        } catch (fallbackErr) {
+          console.error("Firestore fees read fallback failed:", fallbackErr);
+        }
       }
 
     } catch (err) {
@@ -356,7 +413,7 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
     try {
       // Find the document inside our appointments collection
       const appColRef = collection(db, "appointments");
-      const appSnap = await getDocs(query(appColRef, orderBy("createdAt")));
+      const appSnap = await getDocs(query(appColRef, where("patientId", "==", userProfile.uid)));
       let docRefId = "";
       appSnap.forEach((docSnap) => {
         const app = docSnap.data() as Appointment;
