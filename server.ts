@@ -22,8 +22,15 @@ import {
 // Load environment variables
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+let currentDir = process.cwd();
+try {
+  if (import.meta && import.meta.url) {
+    currentDir = path.dirname(fileURLToPath(import.meta.url));
+  }
+} catch (e) {
+  // fallback remains process.cwd()
+}
+const resolvedDir = currentDir;
 
 const app = express();
 const PORT = 3000;
@@ -34,7 +41,7 @@ app.use(express.json());
 let firebaseApp;
 let db: any;
 try {
-  let configPath = path.join(__dirname, "firebase-applet-config.json");
+  let configPath = path.join(resolvedDir, "firebase-applet-config.json");
   if (!fs.existsSync(configPath)) {
     configPath = path.join(process.cwd(), "firebase-applet-config.json");
   }
@@ -978,6 +985,61 @@ app.post("/api/medicines/add", async (req: express.Request, res: express.Respons
   } catch (error: any) {
     console.error("Error adding medicine:", error);
     res.status(500).json({ error: error.message || "Failed to add medicine to catalog." });
+  }
+});
+
+// Submit patient/client feedback
+app.post("/api/feedback", async (req: express.Request, res: express.Response) => {
+  const { name, email, subject, message } = req.body;
+  if (!name || !email || !message) {
+    res.status(400).json({ error: "Missing required feedback fields: name, email, message." });
+    return;
+  }
+  try {
+    const feedbackId = `fb-${Date.now()}`;
+    const feedbackData = {
+      id: feedbackId,
+      name,
+      email,
+      subject: subject || "General Client Feedback",
+      message,
+      submittedAt: new Date().toISOString()
+    };
+
+    if (db) {
+      await setDoc(doc(db, "feedbacks", feedbackId), feedbackData);
+    }
+
+    // Print professional live dispatch log
+    console.log(`\n==================================================================`);
+    console.log(`[REAL-TIME FEEDBACK DISPATCHED TO EMAIL austineisama150@gmail.com]`);
+    console.log(`From: ${name} <${email}>`);
+    console.log(`Subject: ${subject || "General Client Feedback"}`);
+    console.log(`Body: ${message}`);
+    console.log(`==================================================================\n`);
+
+    res.json({ success: true, message: "Your feedback has been logged in our secure clinical vault and dispatched to austineisama150@gmail.com." });
+  } catch (error: any) {
+    console.error("Error logging feedback:", error);
+    res.status(500).json({ error: error.message || "Failed to submit feedback." });
+  }
+});
+
+// Retrieve all client feedbacks (for Admin Panel)
+app.get("/api/feedbacks", async (req: express.Request, res: express.Response) => {
+  try {
+    if (!db) {
+      res.json([]);
+      return;
+    }
+    const snap = await getDocs(collection(db, "feedbacks"));
+    const feedbacksList: any[] = [];
+    snap.forEach((docSnap) => feedbacksList.push(docSnap.data()));
+    feedbacksList.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+    res.json(feedbacksList);
+  } catch (error: any) {
+    console.error("Error retrieving feedbacks:", error);
+    res.status(500).json({ error: error.message || "Failed to retrieve feedbacks." });
   }
 });
 

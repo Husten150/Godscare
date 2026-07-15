@@ -80,15 +80,15 @@ export default function Footer({ setCurrentView }: FooterProps) {
               <Phone className="h-3.5 w-3.5 text-zinc-400 mt-0.5 shrink-0" />
               <div>
                 <p className="font-semibold text-zinc-800">Call Center</p>
-                <p className="hover:text-zinc-900 cursor-pointer">+1 (555) 019-2834</p>
-                <p className="text-[10px] text-zinc-400 font-medium font-mono">Emergency: +1 (555) 911-0000</p>
+                <p className="hover:text-zinc-900 cursor-pointer">09037457567</p>
+                <p className="text-[10px] text-zinc-400 font-medium font-mono">Emergency Support Active</p>
               </div>
             </div>
             <div className="flex items-start space-x-2 text-xs text-zinc-500">
               <Mail className="h-3.5 w-3.5 text-zinc-400 mt-0.5 shrink-0" />
               <div>
                 <p className="font-semibold text-zinc-800">Email Address</p>
-                <p className="hover:text-zinc-900 cursor-pointer">info@greencarehospital.org</p>
+                <p className="hover:text-zinc-900 cursor-pointer">austineisama150@gmail.com</p>
               </div>
             </div>
             <div className="flex items-start space-x-2 text-xs text-zinc-500">

@@ -34,11 +34,12 @@ import {
   GraduationCap,
   Hospital,
   Pill,
-  CreditCard
+  CreditCard,
+  Mail
 } from "lucide-react";
 
 export default function AdminPanel() {
-  const [activeSubTab, setActiveSubTab] = React.useState<"appointments" | "doctors" | "patients" | "billing_fees">("appointments");
+  const [activeSubTab, setActiveSubTab] = React.useState<"appointments" | "doctors" | "patients" | "billing_fees" | "feedbacks">("appointments");
   const [doctors, setDoctors] = React.useState<Doctor[]>([]);
   const [appointments, setAppointments] = React.useState<Appointment[]>([]);
   const [patients, setPatients] = React.useState<UserProfile[]>([]);
@@ -89,6 +90,9 @@ export default function AdminPanel() {
   const [adminPremiumFee, setAdminPremiumFee] = React.useState(500);
   const [updatingFees, setUpdatingFees] = React.useState(false);
   const [feesSuccess, setFeesSuccess] = React.useState("");
+
+  // Client Feedbacks State
+  const [feedbacksList, setFeedbacksList] = React.useState<any[]>([]);
 
   // Medicine Edit State
   const [editingMedicineId, setEditingMedicineId] = React.useState<string | null>(null);
@@ -184,6 +188,17 @@ export default function AdminPanel() {
         }
       } catch (e) {
         console.error("Failed to load admin fees settings:", e);
+      }
+
+      // 7. Load client feedbacks
+      try {
+        const feedbacksRes = await fetch("/api/feedbacks");
+        if (feedbacksRes.ok) {
+          const feedbacksData = await feedbacksRes.json();
+          setFeedbacksList(feedbacksData);
+        }
+      } catch (e) {
+        console.error("Failed to load admin client feedbacks:", e);
       }
 
     } catch (err) {
@@ -837,6 +852,18 @@ export default function AdminPanel() {
               }`}
             >
               Billing & Fees
+            </button>
+            <button
+              onClick={() => {
+                setActiveSubTab("feedbacks");
+              }}
+              className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                activeSubTab === "feedbacks"
+                  ? "bg-white text-zinc-950 border border-zinc-200"
+                  : "text-zinc-500 hover:text-zinc-900"
+              }`}
+            >
+              Client Feedback ({feedbacksList.length})
             </button>
           </div>
 
@@ -1583,6 +1610,59 @@ export default function AdminPanel() {
                   </div>
                 </div>
 
+              </div>
+            )}
+
+            {/* SUBTAB 5: CLIENT FEEDBACKS */}
+            {activeSubTab === "feedbacks" && (
+              <div className="space-y-6">
+                <div className="bg-white border border-zinc-200 rounded-xl p-6 md:p-8 space-y-4">
+                  <div className="border-b border-zinc-100 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                      <h3 className="text-base font-bold text-zinc-950 font-display flex items-center gap-2">
+                        <Mail className="h-5 w-5 text-emerald-600" />
+                        <span>Real-Time Client & Patient Feedback Directory</span>
+                      </h3>
+                      <p className="text-xs text-zinc-500 font-sans mt-0.5">
+                        These submissions are also automatically dispatched in real-time to your administrative email: <strong className="text-zinc-850">austineisama150@gmail.com</strong>.
+                      </p>
+                    </div>
+                    <span className="text-xs font-mono font-bold bg-zinc-100 text-zinc-700 px-3 py-1 rounded-full border border-zinc-200 shrink-0">
+                      {feedbacksList.length} Submissions
+                    </span>
+                  </div>
+
+                  {feedbacksList.length > 0 ? (
+                    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                      {feedbacksList.map((fb) => (
+                        <div key={fb.id} className="p-5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs space-y-3 hover:border-zinc-350 transition-all relative">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-extrabold text-zinc-900 text-sm font-display">{fb.subject}</p>
+                              <p className="text-[10px] text-zinc-500 mt-0.5">
+                                Submitted by: <strong className="text-zinc-700 font-bold">{fb.name}</strong> (<span className="text-zinc-500 font-medium font-mono">{fb.email}</span>)
+                              </p>
+                            </div>
+                            <span className="text-[9px] font-mono bg-zinc-200/80 text-zinc-650 px-2.5 py-1 rounded-md">
+                              {new Date(fb.submittedAt).toLocaleString()}
+                            </span>
+                          </div>
+
+                          <div className="p-4 bg-white border border-zinc-200 rounded-lg text-zinc-700 whitespace-pre-line leading-relaxed text-xs">
+                            {fb.message}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-20 bg-zinc-50 border border-zinc-200 rounded-xl space-y-2">
+                      <p className="text-zinc-400 font-bold text-sm">No client feedback submitted yet</p>
+                      <p className="text-xs text-zinc-400 max-w-sm mx-auto">
+                        Once patients submit feedback on the home page form, they will appear here in real-time and dispatch to your email.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

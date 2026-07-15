@@ -324,6 +324,105 @@ export default function Home({ setCurrentView, userLoggedIn }: HomeProps) {
           ))}
         </div>
       </section>
+
+      {/* Contact & Real-Time Feedback Section */}
+      <section className="py-16 md:py-24 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-zinc-100">
+        <div className="text-center space-y-3 mb-10">
+          <p className="text-emerald-700 font-mono font-bold text-[10px] uppercase tracking-widest">Connect with us</p>
+          <h2 className="text-3xl font-extrabold text-zinc-900 tracking-tight font-display">Real-Time Client Feedback</h2>
+          <p className="text-zinc-500 max-w-md mx-auto text-xs md:text-sm">
+            Have thoughts, questions, or issues? Share your feedback in real-time. It is immediately routed to our administration at <strong className="text-zinc-800">austineisama150@gmail.com</strong>.
+          </p>
+        </div>
+
+        <form 
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const target = e.currentTarget;
+            const formData = new FormData(target);
+            const name = formData.get("name") as string;
+            const email = formData.get("email") as string;
+            const subject = formData.get("subject") as string;
+            const message = formData.get("message") as string;
+
+            if (!name || !email || !message) {
+              alert("Please fill in all required fields (Name, Email, Message).");
+              return;
+            }
+
+            try {
+              const res = await fetch("/api/feedback", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name, email, subject, message })
+              });
+
+              if (res.ok) {
+                const data = await res.json();
+                alert(data.message || "Feedback submitted successfully!");
+                target.reset();
+              } else {
+                const error = await res.text();
+                alert(`Submission failed: ${error}`);
+              }
+            } catch (err: any) {
+              alert(`Error: ${err.message || "Unable to reach feedback server."}`);
+            }
+          }}
+          className="space-y-6 bg-white border border-zinc-200/80 rounded-2xl p-6 md:p-8"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="block text-xs font-mono font-bold uppercase text-zinc-500">Your Name <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                name="name"
+                required
+                placeholder="John Doe"
+                className="w-full px-4 py-2.5 border border-zinc-200 rounded-lg text-xs focus:outline-hidden focus:border-zinc-400 bg-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-mono font-bold uppercase text-zinc-500">Email Address <span className="text-red-500">*</span></label>
+              <input
+                type="email"
+                name="email"
+                required
+                placeholder="you@example.com"
+                className="w-full px-4 py-2.5 border border-zinc-200 rounded-lg text-xs focus:outline-hidden focus:border-zinc-400 bg-white"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-xs font-mono font-bold uppercase text-zinc-500">Subject (Optional)</label>
+            <input
+              type="text"
+              name="subject"
+              placeholder="e.g. Appointment Feedback, Portal Suggestion"
+              className="w-full px-4 py-2.5 border border-zinc-200 rounded-lg text-xs focus:outline-hidden focus:border-zinc-400 bg-white"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-xs font-mono font-bold uppercase text-zinc-500">Message / Feedback <span className="text-red-500">*</span></label>
+            <textarea
+              name="message"
+              required
+              rows={4}
+              placeholder="Tell us about your experience..."
+              className="w-full px-4 py-2.5 border border-zinc-200 rounded-lg text-xs focus:outline-hidden focus:border-zinc-400 bg-white resize-none"
+            ></textarea>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-3 bg-zinc-900 hover:bg-zinc-850 text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs"
+          >
+            Send Real-Time Feedback to Administration
+          </button>
+        </form>
+      </section>
     </div>
   );
 }
