@@ -144,7 +144,8 @@ app.post("/api/payments/initialize", async (req: express.Request, res: express.R
         email,
         amount: Math.round(amount * 100), // Paystack expects amount in Kobo (Naira cents)
         reference,
-        channels: ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
+        // Omitting 'channels' allows all forms of payment active on the merchant's Paystack Dashboard
+        // (including bank transfers, bank payments, card payments, USSD, mobile money, etc.)
         callback_url: `${process.env.APP_URL || dynamicAppUrl}/api/payments/verify-callback?userId=${userId}`,
         metadata: {
           userId,
@@ -264,19 +265,37 @@ app.get("/api/payments/simulate-gate", (req: express.Request, res: express.Respo
           <div class="md:col-span-7 p-6 md:p-8 space-y-6 flex flex-col justify-between bg-[#fbfbfc]">
             <div>
               <div class="flex items-center justify-between pb-4 border-b border-zinc-100">
-                <h2 class="text-sm font-extrabold text-zinc-900 tracking-tight">Debit/Credit Card Payment</h2>
+                <h2 id="methodTitle" class="text-sm font-extrabold text-zinc-900 tracking-tight">Debit/Credit Card Payment</h2>
                 <div class="flex gap-1">
                   <!-- Real-time Status -->
                   <span class="flex h-2 w-2 relative">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                   </span>
-                  <span class="text-[10px] font-mono font-bold text-zinc-400">All Card Types Allowed</span>
+                  <span class="text-[10px] font-mono font-bold text-zinc-400">Sandbox Mode</span>
                 </div>
               </div>
 
-              <!-- Interactive Card Visualizer -->
-              <div id="cardVisual" class="relative overflow-hidden mt-5 w-full h-44 rounded-2xl bg-gradient-to-br from-zinc-800 to-zinc-950 p-6 text-white shadow-md flex flex-col justify-between transition-all duration-300">
+              <!-- Payment Method Tabs -->
+              <div class="flex border-b border-zinc-100 mb-5 gap-1 sm:gap-2">
+                <button type="button" onclick="switchTab('card')" id="tab-card" class="pb-2 text-xs font-bold text-emerald-600 border-b-2 border-emerald-600 px-2 cursor-pointer">
+                  Card
+                </button>
+                <button type="button" onclick="switchTab('transfer')" id="tab-transfer" class="pb-2 text-xs font-bold text-zinc-400 hover:text-zinc-600 px-2 cursor-pointer">
+                  Bank Transfer
+                </button>
+                <button type="button" onclick="switchTab('bank')" id="tab-bank" class="pb-2 text-xs font-bold text-zinc-400 hover:text-zinc-600 px-2 cursor-pointer">
+                  Bank Account
+                </button>
+                <button type="button" onclick="switchTab('ussd')" id="tab-ussd" class="pb-2 text-xs font-bold text-zinc-400 hover:text-zinc-600 px-2 cursor-pointer">
+                  USSD
+                </button>
+              </div>
+
+              <!-- PANE 1: CARD -->
+              <div id="pane-card" class="space-y-4">
+                <!-- Interactive Card Visualizer -->
+                <div id="cardVisual" class="relative overflow-hidden mt-5 w-full h-44 rounded-2xl bg-gradient-to-br from-zinc-800 to-zinc-950 p-6 text-white shadow-md flex flex-col justify-between transition-all duration-300">
                 <!-- Chip & Contactless Icons -->
                 <div class="flex justify-between items-start">
                   <!-- Gold Card Chip SVG -->
@@ -397,6 +416,105 @@ app.get("/api/payments/simulate-gate", (req: express.Request, res: express.Respo
                   </div>
                 </div>
               </div>
+              <!-- END OF PANE-CARD -->
+
+              <!-- PANE 2: TRANSFER -->
+              <div id="pane-transfer" class="hidden space-y-4">
+                <div class="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 text-center space-y-3">
+                  <p class="text-xs text-emerald-800 font-medium">To complete this payment, please transfer exactly the amount below to the designated simulation account:</p>
+                  <div class="bg-white p-3.5 rounded-xl border border-zinc-100 space-y-2">
+                    <div class="flex justify-between items-center text-xs">
+                      <span class="text-zinc-400">Amount</span>
+                      <span class="font-bold font-mono text-zinc-800">₦${amount} NGN</span>
+                    </div>
+                    <div class="flex justify-between items-center text-xs border-t border-zinc-50 pt-2">
+                      <span class="text-zinc-400">Bank Name</span>
+                      <span class="font-bold text-zinc-800">GodsCare Sandbox Bank</span>
+                    </div>
+                    <div class="flex justify-between items-center text-xs border-t border-zinc-50 pt-2">
+                      <span class="text-zinc-400">Account Number</span>
+                      <span class="font-bold font-mono text-zinc-800">9901485293</span>
+                    </div>
+                    <div class="flex justify-between items-center text-xs border-t border-zinc-50 pt-2">
+                      <span class="text-zinc-400">Beneficiary</span>
+                      <span class="font-bold text-zinc-800">GodsCare Clinic Trust</span>
+                    </div>
+                  </div>
+                  <p class="text-[10px] text-zinc-400 italic">This is a sandbox environment. No actual money will be transferred.</p>
+                </div>
+                <button type="button" onclick="submitTransferPayment()" id="transferBtn" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-emerald-600/10">
+                  I've Sent the Transfer
+                </button>
+              </div>
+
+              <!-- PANE 3: BANK ACCOUNT -->
+              <div id="pane-bank" class="hidden space-y-4">
+                <div class="space-y-3 bg-white border border-zinc-100 rounded-2xl p-4">
+                  <div>
+                    <label class="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Choose your Bank</label>
+                    <select id="bankSelect" class="w-full mt-1 px-4 py-2.5 bg-white border border-zinc-200 focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 rounded-xl text-sm outline-none transition">
+                      <option value="">-- Select Bank --</option>
+                      <option value="gtb">Guaranty Trust Bank (GTBank)</option>
+                      <option value="zenith">Zenith Bank</option>
+                      <option value="access">Access Bank</option>
+                      <option value="uba">United Bank for Africa (UBA)</option>
+                      <option value="kuda">Kuda Bank</option>
+                      <option value="opay">OPay</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Account Number or Phone Number</label>
+                    <input 
+                      type="text" 
+                      id="bankAccountNum" 
+                      placeholder="e.g. 0123456789" 
+                      maxlength="11"
+                      class="w-full mt-1 px-4 py-2.5 bg-white border border-zinc-200 focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 rounded-xl text-sm font-mono tracking-wider outline-none transition"
+                    />
+                  </div>
+                </div>
+                <button type="button" onclick="submitBankAccountPayment()" id="bankBtn" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-emerald-600/10">
+                  Authorize Bank Account
+                </button>
+              </div>
+
+              <!-- PANE 4: USSD -->
+              <div id="pane-ussd" class="hidden space-y-4">
+                <div class="space-y-3">
+                  <label class="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Select Bank to Dial Code</label>
+                  <div class="grid grid-cols-2 gap-2">
+                    <button type="button" onclick="dialUssd('*737#')" class="p-3 border border-zinc-200 rounded-xl text-left bg-white hover:bg-zinc-50 transition cursor-pointer">
+                      <p class="text-xs font-bold text-zinc-800">GTBank</p>
+                      <p class="text-[10px] font-mono text-zinc-400 mt-0.5">*737#</p>
+                    </button>
+                    <button type="button" onclick="dialUssd('*966#')" class="p-3 border border-zinc-200 rounded-xl text-left bg-white hover:bg-zinc-50 transition cursor-pointer">
+                      <p class="text-xs font-bold text-zinc-800">Zenith Bank</p>
+                      <p class="text-[10px] font-mono text-zinc-400 mt-0.5">*966#</p>
+                    </button>
+                    <button type="button" onclick="dialUssd('*901#')" class="p-3 border border-zinc-200 rounded-xl text-left bg-white hover:bg-zinc-50 transition cursor-pointer">
+                      <p class="text-xs font-bold text-zinc-800">Access Bank</p>
+                      <p class="text-[10px] font-mono text-zinc-400 mt-0.5">*901#</p>
+                    </button>
+                    <button type="button" onclick="dialUssd('*919#')" class="p-3 border border-zinc-200 rounded-xl text-left bg-white hover:bg-zinc-50 transition cursor-pointer">
+                      <p class="text-xs font-bold text-zinc-800">UBA</p>
+                      <p class="text-[10px] font-mono text-zinc-400 mt-0.5">*919#</p>
+                    </button>
+                  </div>
+                </div>
+                <div id="ussdDialer" class="hidden bg-zinc-900 text-amber-400 p-4 rounded-xl font-mono text-xs space-y-3 text-center border border-zinc-800 shadow-inner">
+                  <p class="text-white">Dialing USSD Code...</p>
+                  <p id="ussdCodeDisplay" class="text-lg font-bold tracking-widest text-emerald-400"></p>
+                  <p class="text-[11px] text-zinc-400 leading-relaxed font-sans">Enter your sandbox transaction authorization code in the prompt below:</p>
+                  <div class="flex justify-center">
+                    <input type="password" id="ussdPin" placeholder="Enter Sandbox PIN" maxlength="4" class="px-3 py-1.5 bg-zinc-800 text-white rounded border border-zinc-700 text-center outline-none tracking-widest font-bold text-sm" />
+                  </div>
+                  <div class="flex gap-2 justify-center pt-1">
+                    <button type="button" onclick="closeUssdDialer()" class="px-3 py-1 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 rounded text-[10px] font-bold uppercase">Cancel</button>
+                    <button type="button" onclick="submitUssdPayment()" class="px-3 py-1 bg-emerald-600 text-white hover:bg-emerald-700 rounded text-[10px] font-bold uppercase">Submit</button>
+                  </div>
+                </div>
+              </div>
+
             </div>
 
             <!-- PIN/OTP Authorization Step Modal (Simulated) -->
@@ -419,14 +537,18 @@ app.get("/api/payments/simulate-gate", (req: express.Request, res: express.Respo
               </div>
             </div>
 
-            <!-- Footer: actions -->
-            <div class="space-y-2 mt-6">
+            <!-- Footer: actions (Card specific) -->
+            <div id="cardFooterButtons" class="space-y-2 mt-6">
               <button 
                 id="confirmBtn"
                 class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-emerald-600/10"
               >
                 Simulate Secure Card Payment
               </button>
+            </div>
+
+            <!-- Persistent Cancel Button -->
+            <div class="mt-4">
               <a 
                 href="/"
                 class="block w-full py-2.5 text-center border border-zinc-200 text-zinc-500 rounded-xl text-xs font-mono uppercase tracking-wider hover:bg-zinc-50 transition"
@@ -694,6 +816,183 @@ app.get("/api/payments/simulate-gate", (req: express.Request, res: express.Respo
               btn.innerText = 'Payment Error';
               btn.disabled = false;
               alert('Error verifying payment: ' + err.message);
+            }
+          };
+
+          // --- Multi-channel Sandbox Simulation Handlers ---
+          window.switchTab = function(tabId) {
+            const tabs = ['card', 'transfer', 'bank', 'ussd'];
+            const titles = {
+              'card': 'Debit/Credit Card Payment',
+              'transfer': 'Bank Transfer Payment',
+              'bank': 'Bank Account Debit',
+              'ussd': 'USSD Dial Code Payment'
+            };
+            
+            // Update title
+            document.getElementById('methodTitle').innerText = titles[tabId];
+
+            tabs.forEach(t => {
+              const tabBtn = document.getElementById('tab-' + t);
+              const pane = document.getElementById('pane-' + t);
+              
+              if (t === tabId) {
+                tabBtn.className = 'pb-2 text-xs font-bold text-emerald-600 border-b-2 border-emerald-600 px-2 cursor-pointer';
+                pane.classList.remove('hidden');
+              } else {
+                tabBtn.className = 'pb-2 text-xs font-bold text-zinc-400 hover:text-zinc-600 px-2 cursor-pointer';
+                pane.classList.add('hidden');
+              }
+            });
+
+            // Toggle footer button container for Card
+            const cardFooter = document.getElementById('cardFooterButtons');
+            if (tabId === 'card') {
+              cardFooter.classList.remove('hidden');
+            } else {
+              cardFooter.classList.add('hidden');
+            }
+          };
+
+          window.submitTransferPayment = async function() {
+            const btn = document.getElementById('transferBtn');
+            btn.innerText = 'Verifying Bank Transfer...';
+            btn.disabled = true;
+
+            try {
+              const res = await fetch('/api/payments/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  reference: '${reference}', 
+                  userId: '${userId}', 
+                  isSimulated: true, 
+                  amount: Number('${amount}'),
+                  paymentType: '${paymentType}',
+                  targetId: '${targetId}',
+                  medicineName: '${medicineName}'
+                })
+              });
+              const result = await res.json();
+              if (result.status === 'success') {
+                btn.innerText = 'Transfer Received! Redirecting...';
+                setTimeout(() => {
+                  window.location.href = '/?payment=success&type=${paymentType}&message=TransferReceived';
+                }, 1000);
+              } else {
+                btn.innerText = 'Verify Transfer';
+                btn.disabled = false;
+                alert('Transfer verification failed: ' + result.error);
+              }
+            } catch (err) {
+              btn.innerText = 'Transfer Error';
+              btn.disabled = false;
+              alert('Error verifying transfer: ' + err.message);
+            }
+          };
+
+          window.submitBankAccountPayment = async function() {
+            const bank = document.getElementById('bankSelect').value;
+            const acct = document.getElementById('bankAccountNum').value;
+            if (!bank) {
+              alert('Please select your bank.');
+              return;
+            }
+            if (!acct || acct.length < 10) {
+              alert('Please enter a valid 10-digit account number.');
+              return;
+            }
+
+            const btn = document.getElementById('bankBtn');
+            btn.innerText = 'Sending OTP...';
+            btn.disabled = true;
+
+            setTimeout(async () => {
+              const otp = prompt('An OTP has been sent to your phone. Enter sandbox OTP "1234" to authorize:');
+              if (otp === '1234' || otp) {
+                btn.innerText = 'Authorizing Account Debit...';
+                try {
+                  const res = await fetch('/api/payments/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                      reference: '${reference}', 
+                      userId: '${userId}', 
+                      isSimulated: true, 
+                      amount: Number('${amount}'),
+                      paymentType: '${paymentType}',
+                      targetId: '${targetId}',
+                      medicineName: '${medicineName}'
+                    })
+                  });
+                  const result = await res.json();
+                  if (result.status === 'success') {
+                    btn.innerText = 'Debit Approved! Redirecting...';
+                    setTimeout(() => {
+                      window.location.href = '/?payment=success&type=${paymentType}&message=BankDebitApproved';
+                    }, 1000);
+                  } else {
+                    btn.innerText = 'Authorize Bank Account';
+                    btn.disabled = false;
+                    alert('Bank authorization failed: ' + result.error);
+                  }
+                } catch (err) {
+                  btn.innerText = 'Debit Error';
+                  btn.disabled = false;
+                  alert('Error verifying debit: ' + err.message);
+                }
+              } else {
+                btn.innerText = 'Authorize Bank Account';
+                btn.disabled = false;
+                alert('OTP verification cancelled or invalid.');
+              }
+            }, 1000);
+          };
+
+          window.dialUssd = function(code) {
+            document.getElementById('ussdCodeDisplay').innerText = code;
+            document.getElementById('ussdDialer').classList.remove('hidden');
+          };
+
+          window.closeUssdDialer = function() {
+            document.getElementById('ussdDialer').classList.add('hidden');
+            document.getElementById('ussdPin').value = '';
+          };
+
+          window.submitUssdPayment = async function() {
+            const pin = document.getElementById('ussdPin').value;
+            if (!pin || pin.length < 4) {
+              alert('Please enter your 4-digit security PIN to authorize USSD.');
+              return;
+            }
+
+            const code = document.getElementById('ussdCodeDisplay').innerText;
+            closeUssdDialer();
+            
+            try {
+              const res = await fetch('/api/payments/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  reference: '${reference}', 
+                  userId: '${userId}', 
+                  isSimulated: true, 
+                  amount: Number('${amount}'),
+                  paymentType: '${paymentType}',
+                  targetId: '${targetId}',
+                  medicineName: '${medicineName}'
+                })
+              });
+              const result = await res.json();
+              if (result.status === 'success') {
+                setTimeout(() => {
+                  window.location.href = '/?payment=success&type=${paymentType}&message=USSDApproved';
+                }, 1000);
+              } else {
+                alert('USSD authorization failed: ' + result.error);
+              }
+            } catch (err) {
+              alert('Error verifying USSD transaction: ' + err.message);
             }
           };
 
