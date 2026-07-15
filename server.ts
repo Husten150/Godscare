@@ -144,8 +144,7 @@ app.post("/api/payments/initialize", async (req: express.Request, res: express.R
         email,
         amount: Math.round(amount * 100), // Paystack expects amount in Kobo (Naira cents)
         reference,
-        // Omitting 'channels' allows all forms of payment active on the merchant's Paystack Dashboard
-        // (including bank transfers, bank payments, card payments, USSD, mobile money, etc.)
+        channels: ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
         callback_url: `${process.env.APP_URL || dynamicAppUrl}/api/payments/verify-callback?userId=${userId}`,
         metadata: {
           userId,
