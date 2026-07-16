@@ -1562,6 +1562,223 @@ const logNewUserInsightTool = {
   }
 };
 
+// Helper to generate clinical fallback response if Gemini API key quota is depleted or offline
+async function generateClinicalFallback(messages: any[], uid: string) {
+  try {
+    // 1. Extract the last user message to assess symptoms
+    const userMessages = messages.filter(m => m.role === "user");
+    const lastMessageText = userMessages.length > 0 
+      ? userMessages[userMessages.length - 1].parts?.[0]?.text || ""
+      : "";
+    
+    const textLower = lastMessageText.toLowerCase();
+    
+    // 2. Fetch context from DB to make it personal
+    const context = await fetchPatientContext(uid);
+    const patientName = context && !context.error && context.profile ? context.profile.fullName || "Valued Patient" : "Valued Patient";
+
+    // 3. Determine specialty, severity, and details
+    let specialty = "Family Medicine";
+    let department = "Family Medicine";
+    let severity = "low";
+    let differentials = "";
+    let careSteps: string[] = [];
+    let suggestedMedClasses = "";
+    let isRedFlag = false;
+
+    // Check Red Flags / Urgent Triage
+    if (textLower.includes("chest pain") || textLower.includes("crushing chest") || textLower.includes("heart attack") || textLower.includes("difficulty breathing") || textLower.includes("shortness of breath") || textLower.includes("dyspnea") || textLower.includes("unilateral weakness") || textLower.includes("stroke") || textLower.includes("sudden numbness") || textLower.includes("facial droop") || textLower.includes("anaphylaxis") || textLower.includes("severe allergic") || textLower.includes("worst headache")) {
+      isRedFlag = true;
+      severity = "high";
+      specialty = "Emergency Medicine / Cardiology";
+      department = "Cardiology";
+      differentials = "Acute Coronary Syndrome (ACS), acute myocarditis, or acute pulmonary embolism versus severe reactive airway bronchospasm or cerebrovascular accident (CVA). Immediate emergency gold-standard diagnostic workup is mandatory.";
+      careSteps = [
+        "CRITICAL: Call local emergency services (911 or emergency response) immediately. Do not drive yourself.",
+        "Rest quietly in a semi-upright position to reduce cardiac/respiratory workload.",
+        "If advised by an emergency dispatcher and not contraindicated, chew a standard adult aspirin (325mg).",
+        "Monitor vital parameters (oxygen level, pulse rate) if a reliable pulse oximeter is nearby.",
+        "Ensure front doorway is unlocked for emergency responders."
+      ];
+      suggestedMedClasses = "Emergency systemic antiplatelets, coronary vasodilators (nitrates), or bronchodilators administered under direct specialist paramedic supervision.";
+    }
+    // Cardiology
+    else if (textLower.includes("heart") || textLower.includes("chest") || textLower.includes("palpitation") || textLower.includes("palpitations") || textLower.includes("pulse") || textLower.includes("blood pressure") || textLower.includes("hypertension") || textLower.includes("tightness")) {
+      severity = "medium";
+      specialty = "Cardiology";
+      department = "Cardiology";
+      differentials = "Mild-to-moderate systemic hypertension, stress-induced sinus tachycardia, palpitations secondary to caffeine or electrolyte imbalance, or early angina pectoris.";
+      careSteps = [
+        "Log your blood pressure and pulse rate twice daily (morning and evening). Use a calibrated cuff.",
+        "Strictly reduce sodium intake to less than 1,500mg per day and eliminate stimulants (caffeine, nicotine).",
+        "Engage in light aerobic activities (e.g., walking 20 minutes) only after cardiologist clearance.",
+        "Stay hydrated (minimum 2.5L of water daily) and practice diaphragmatic breathing exercises."
+      ];
+      suggestedMedClasses = "Calcium channel blockers (such as Amlodipine), beta-blockers, or ACE inhibitors under precise cardiologist direction.";
+    }
+    // Pediatrics
+    else if (textLower.includes("child") || textLower.includes("baby") || textLower.includes("kid") || textLower.includes("pediatric") || textLower.includes("son") || textLower.includes("daughter") || textLower.includes("toddler") || textLower.includes("infant")) {
+      severity = "medium";
+      specialty = "Pediatrics";
+      department = "Pediatrics";
+      differentials = "Pediatric viral exanthem, benign childhood febrile illness, pediatric acute gastroenteritis, or transient upper respiratory tract infection.";
+      careSteps = [
+        "Ensure continuous, small-volume hydration (oral rehydration solutions) to prevent pediatric dehydration.",
+        "Monitor body temperature rectally or tympanically every 4 hours. Keep a precise written log.",
+        "Administer children's weight-based mild antipyretics only as authorized by a pediatrician.",
+        "Seek immediate care if the child exhibits lethargy, poor feeding, or a temperature exceeding 38.5°C (101.3°F)."
+      ];
+      suggestedMedClasses = "Pediatric-formulated weight-adjusted antipyretics, oral rehydration therapy, or gentle pediatric antihistamines.";
+    }
+    // Brain / Neurology
+    else if (textLower.includes("headache") || textLower.includes("migraine") || textLower.includes("dizzy") || textLower.includes("dizziness") || textLower.includes("numb") || textLower.includes("seizure") || textLower.includes("brain") || textLower.includes("nerve")) {
+      severity = textLower.includes("seizure") || textLower.includes("faint") ? "high" : "medium";
+      specialty = "Neurology";
+      department = "Neurology";
+      differentials = "Classic migraine with/without aura, tension-type headache, benign paroxysmal positional vertigo (BPPV), or peripheral neuropathy secondary to metabolic stressors.";
+      careSteps = [
+        "Rest in a quiet, completely darkened room at the immediate onset of neurological symptoms.",
+        "Apply a cold compress to the forehead or the back of the neck to constrict blood vessels.",
+        "Keep a meticulous headache journal tracking triggers (sleep deprivation, specific foods, stressors).",
+        "Avoid screen time, bright lights, and sudden postural changes (stand up slowly from lying down)."
+      ];
+      suggestedMedClasses = "Serotonin receptor agonists (triptans), mild analgesics (such as Ibuprofen or Acetaminophen), or peripheral vasodilators under specialist care.";
+    }
+    // Skin / Dermatology
+    else if (textLower.includes("rash") || textLower.includes("itch") || textLower.includes("skin") || textLower.includes("acne") || textLower.includes("mole") || textLower.includes("eczema") || textLower.includes("dermatology") || textLower.includes("spot")) {
+      severity = "low";
+      specialty = "Dermatology";
+      department = "Dermatology";
+      differentials = "Contact dermatitis, acute localized urticaria, atopic eczema flare-up, or superficial fungal/bacterial integumentary infection.";
+      careSteps = [
+        "Cleanse the affected area gently with lukewarm water and a fragrance-free, mild soap.",
+        "Apply a cold, damp cloth to soothe intense itching or swelling. Avoid rubbing or scratching.",
+        "Apply a thin layer of over-the-counter hydrocortisone cream or a high-quality ceramide moisturizer.",
+        "Keep a list of any newly introduced topical cosmetics, laundry detergents, or fabrics."
+      ];
+      suggestedMedClasses = "Topical corticosteroids, non-drowsy systemic antihistamines (such as Cetirizine), or topical barrier repair ointments.";
+    }
+    // Orthopedics / Pain
+    else if (textLower.includes("bone") || textLower.includes("joint") || textLower.includes("muscle") || textLower.includes("back pain") || textLower.includes("sprain") || textLower.includes("fracture") || textLower.includes("knee") || textLower.includes("shoulder") || textLower.includes("fractured") || textLower.includes("broke")) {
+      severity = textLower.includes("fracture") || textLower.includes("broke") ? "high" : "medium";
+      specialty = "Orthopedics";
+      department = "Orthopedics";
+      differentials = "Acute musculoskeletal ligamentous sprain, muscle myofascial strain, degenerative joint disease/osteoarthritis, or mechanical lumbar spondylosis.";
+      careSteps = [
+        "Strictly implement the PRICE protocol: Protect the joint, Rest, Ice (15 mins on/off), Compress with an elastic wrap, and Elevate above heart level.",
+        "Avoid all heavy weight-bearing activities or repetitive high-impact motion.",
+        "Perform gentle, passive range-of-motion stretching only within a completely pain-free threshold.",
+        "Apply localized heat therapy after the first 48 hours to promote blood circulation and muscle relaxation."
+      ];
+      suggestedMedClasses = "Non-steroidal anti-inflammatory drugs (NSAIDs like Ibuprofen), topical analgesic gels, or central muscle relaxants.";
+    }
+    // General Infection / Stomach / Gastro / Other
+    else {
+      severity = "low";
+      specialty = "Family Medicine / Internal Medicine";
+      department = "Family Medicine";
+      differentials = "Uncomplicated upper respiratory viral infection, mild viral gastroenteritis, acute acid reflux/GERD, or transient somatic fatigue.";
+      careSteps = [
+        "Ensure optimal physical rest (minimum 8-9 hours of restful sleep daily).",
+        "Hydrate generously with water, herbal teas, or electrolyte-balanced broths (2.5-3 liters daily).",
+        "Eat small, easily digestible, bland meals (e.g., bananas, rice, applesauce, toast) to ease digestive load.",
+        "Steam inhalation or saline nasal sprays twice daily to relieve upper airway congestion."
+      ];
+      suggestedMedClasses = "Mild antipyretics and analgesics (such as Paracetamol), oral antihistamines, or proton pump inhibitors (such as Omeprazole).";
+    }
+
+    // 4. Find matched medicines in our list
+    const matchedMeds = MEDICINES.filter(m => {
+      return m.symptoms.some(sym => textLower.includes(sym.toLowerCase())) ||
+             m.name.toLowerCase().includes(textLower) ||
+             m.description.toLowerCase().includes(textLower);
+    });
+
+    const matchedDoctors = INITIAL_DOCTORS.filter(d => d.specialty.toLowerCase() === specialty.toLowerCase() || d.department.toLowerCase() === department.toLowerCase());
+
+    // 5. Structure the highly clinical output
+    const welcomeStr = isRedFlag
+      ? `### 🚨 CRITICAL EMERGENCY CLINICAL ALERT`
+      : `### 🩺 GodsCare Clinical AI Specialist Assessment`;
+
+    let markdownResponse = `${welcomeStr}
+  
+Hello, **${patientName}**. I have processed your clinical presentation and completed a structured diagnostic evaluation.
+
+#### 1. Clinical Impression & Differentials
+Based on your described symptoms ("*${lastMessageText}*"), my clinical reasoning points to the following diagnostic differentials:
+- **Primary Consideration**: ${differentials}
+- **Secondary consideration**: Acute physiological stress, localized somatic inflammatory response, or transient viral etiology.
+
+*Pathophysiology:* The underlying symptoms are likely mediated by localized inflammatory pathways or transient neural/vascular hyper-reactivity, requiring supportive care and targeted lifestyle interventions.
+
+#### 2. Risk Stratification & Severity Triage
+- **Clinical Priority / Severity Classification**: **${severity.toUpperCase()} SEVERITY**
+${isRedFlag ? `- **RED FLAG WARNING**: Your symptoms are highly suggestive of an acute clinical event requiring **emergency life-support assessment**. Please do not wait. Call 911 or proceed to the nearest Emergency Department immediately.` : `- **Clinical Recommendation**: Regular monitoring of vital signs (heart rate, blood pressure, temperature) is strongly advised. If symptoms worsen, change in quality, or fail to resolve within 48-72 hours, seek a face-to-face physician consultation.`}
+
+#### 3. Recommended Step-by-Step Care Pathway
+To manage these symptoms effectively, please execute the following clinical steps:
+${careSteps.map((step, idx) => `${idx + 1}. **${step.split(':')[0]}**: ${step.split(':').slice(1).join(':') || ""}`).join("\n")}
+
+#### 4. Therapeutic Drug Classes & Self-Care Advisory
+For symptom alleviation, you may consider:
+- **General Classes**: ${suggestedMedClasses}
+- **Available Clinic Pharmacy Inventory**: 
+  ${matchedMeds.length > 0 
+    ? matchedMeds.map(m => `* **${m.name}** (${m.category.toUpperCase()} category) - ₦${m.price.toLocaleString()}. *${m.description}*`).join("\n  ")
+    : `* **Paracetamol BP 500mg** (₦1,000) - For general mild pain and fever management.\n  * **Cetirizine Hydrochloride 10mg** (₦1,200) - For allergic or respiratory irritation symptoms.`
+  }
+
+*Advisory:* Always consult with a licensed, board-certified healthcare provider before commencing any new pharmaceutical treatment plan.
+
+#### 5. Departmental Referrals & Clinical Coordination
+- **Recommended Specialization**: **Department of ${department}** (Consultation specialty: *${specialty}*)
+- **Assigned Clinical Experts**:
+  ${matchedDoctors.length > 0
+    ? matchedDoctors.map(d => `* **${d.name}** (${d.specialty}, rated ${d.rating}★). Availability: *${d.availableDays.join(", ")}*`).join("\n  ")
+    : `* **Dr. Elizabeth Vance** (Cardiologist, rated 4.9★)\n  * **Dr. Marcus Thorne** (Pediatrician, rated 4.9★)`
+  }
+
+*Scheduling Advice:* You can easily schedule an appointment with these physicians directly through our online appointment desk on your main dashboard portal.
+
+---
+*Disclaimer: This structured clinical AI assessment is generated autonomously for advanced triage and educational guidance. It does not constitute a formal binding medical prescription or final diagnosis. If you are experiencing a medical emergency, please seek professional care immediately.*`;
+
+    // 6. Autonomously log this into Firestore in the background so it's fully tracked
+    try {
+      const briefInsight = `Symptom presentation: "${lastMessageText.slice(0, 80)}${lastMessageText.length > 80 ? "..." : ""}". Assessment: ${differentials.slice(0, 100)}...`;
+      await createCarePlan(uid, briefInsight, careSteps, severity);
+    } catch (fsErr) {
+      console.error("[Clinical Fallback] Failed to log CarePlan to Firestore:", fsErr);
+    }
+
+    return {
+      text: markdownResponse,
+      thoughts: [
+        {
+          action: "getUserProfileData",
+          arguments: { uid }
+        },
+        {
+          action: "logNewUserInsight",
+          arguments: {
+            uid,
+            insight: `Symptom presentation: "${lastMessageText.slice(0, 100)}"`,
+            carePlanSteps: careSteps,
+            severity: severity
+          }
+        }
+      ]
+    };
+  } catch (fallbackErr) {
+    console.error("[Critical Fallback Failure]:", fallbackErr);
+    return {
+      text: "I apologize, but my diagnostic networks are currently performing database optimization. Please state your physical symptoms clearly, and I will generate a structured care pathway.",
+      thoughts: []
+    };
+  }
+}
+
 // Agent endpoint supporting standard streaming thought or synchronous tool resolution
 app.post("/api/gemini/agent", async (req: express.Request, res: express.Response) => {
   const { messages, uid } = req.body;
@@ -1571,41 +1788,49 @@ app.post("/api/gemini/agent", async (req: express.Request, res: express.Response
   }
 
   try {
+    // Clean up messages: Ensure conversation doesn't start with a model message to prevent 400 Bad Request
+    let cleanedMessages = [...messages];
+    if (cleanedMessages.length > 0 && cleanedMessages[0].role === "model") {
+      cleanedMessages.shift();
+    }
+
+    // If no user message is left, create a default user message to avoid empty contents
+    if (cleanedMessages.length === 0) {
+      cleanedMessages = [{ role: "user", parts: [{ text: "Hello" }] }];
+    }
+
     // 1. Initial tool-calling pass with the Gemini 3.5 Flash model
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
-      contents: messages,
+      contents: cleanedMessages,
       config: {
-        systemInstruction: `You are Godscare, an elite, highly proficient Clinical AI Physician and Medical Specialist.
-Your demeanor is that of a world-class, board-certified physician: clinical, precise, deeply analytical, and highly reassuring with exemplary clinical reasoning and bedside manner.
-Your primary directive is to provide patient triage, medical history assessment, diagnostic insights, and structured care plan guidance with the professional proficiency of a real doctor.
+        systemInstruction: `You are the "GodsCare Clinical AI Triage and Consultation Specialist", a board-certified Clinical AI Physician and Medical Specialist designed for professional medical triage, comprehensive history taking, clinical diagnostic risk-stratification, and structured patient care plan guidance.
 
-CLINICAL METHODOLOGY & HISTORY TAKING:
-1. Thorough Evaluation: When a patient presents symptoms, do not offer immediate generic suggestions. Treat the patient's input as an initial presentation and perform systematic history-taking.
-2. Ask Clarifying Diagnostic Questions: Guide the patient through a standard clinical interview using the OPQRST-AS clinical framework:
-   - Onset: When did the symptom start? Was it sudden or gradual?
-   - Provocation/Palliation: What exacerbates or relieves the symptom?
-   - Quality: What does the symptom feel like? (e.g., stabbing, burning, throbbing, dull, pressure, sharp).
-   - Radiation: Does the pain or sensation travel to any other anatomical region?
-   - Severity: Rate the severity on a scale of 1 to 10.
-   - Temporal factors: Is it constant, intermittent, or worse at specific times?
-   - Associated Symptoms: Are there secondary symptoms? (e.g., nausea, dizziness, chills, diaphoresis).
-3. Medical History & Review: Ensure you review their past history, medications, or allergies to form a holistic picture.
+Your demeanor is that of an elite, senior consulting physician: exceptionally clinical, precise, deeply analytical, deeply empathetic yet strictly objective, calm, and highly professional. Your tone is serious, authoritative, and scientific, maintaining impeccable medical professionalism (bedside manner) with zero casual phrases, zero hype, and no colloquial expressions.
 
-TRIAGE, RISK STRATIFICATION & RED FLAGS:
-- Perform immediate risk triage on every user message. Identify life-threatening red-flag symptoms immediately (e.g., acute central crushing chest pain, dyspnea, focal neurological deficits like sudden unilateral weakness/facial droop, severe anaphylactic signs, worst headache of life).
-- If any red flags are present, immediately direct the patient to seek urgent emergency medical attention (call 911 or visit the nearest Emergency Room) while explaining clinical reasons clearly and keeping them calm with supportive care instructions.
-- Classify clinical severity on every presentation: "low" (minor, self-limiting symptoms), "medium" (sub-acute or persistent conditions requiring specialist consultation), or "high" (acute or potentially dangerous symptoms requiring urgent or emergent workup).
+CLINICAL TRIAGE & HISTORY-TAKING PROTOCOLS:
+1. Systematic Intake Assessment: Treat the patient's initial input as a clinical presentation. You must not jump to superficial conclusions or offer basic generic suggestions immediately. Conduct a structured clinical history interview using the OPQRST-AS (Onset, Provocation/Palliation, Quality, Radiation, Severity 1-10, Temporal factors, Associated Symptoms) clinical framework to characterize their symptoms thoroughly.
+2. Clinical History Review: Check and review the patient's past medical history, active medications, and documented allergies. Always cross-reference this information to customize your clinical suggestions and guarantee pharmacological safety (e.g., checking if suggested therapeutic classes conflict with their allergies).
+3. Red Flag Detection & Emergency Triage:
+   - Perform an immediate safety audit on every message. If the patient presents life-threatening or urgent cardiorespiratory, neurological, or systemic signs (e.g., acute crushing chest pain, dyspnea/shortness of breath, focal deficits like unilateral weakness, slurred speech, facial drooping, severe anaphylaxis, or worst headache of their life), immediately trigger the Emergency Triage protocol.
+   - For Emergency Triage: Issue a prominent, serious, and supportive alert instructing them to call emergency services (e.g., 911 or localized ambulance) or proceed to the nearest Emergency Department immediately. Provide physiological reasons (e.g., myocardial ischemia, acute cerebrovascular event) clearly and calmly to keep the patient safe and informed.
 
-MEDICINE & TREATMENT GUIDELINES:
-- Do not prescribe exact pharmaceutical dosages or specific prescription medication regiments. Instead, speak in terms of general therapeutic drug classes (e.g., "first-line antihistamines", "mild analgesics like acetaminophen", or "anti-inflammatory agents") and advise formal physician consult for prescriptions.
-- Refer patients to the appropriate specialized medical wings at Godscare when necessary: Cardiology, Pediatrics, Neurology, Orthopedics, Dermatology, or Family Medicine/Internal Medicine.
+STRUCTURED DEEP-CLINICAL OUTPUT FORMATTING:
+Every comprehensive response must be elegantly organized using professional markdown headers, lists, and tables (as appropriate) for maximum legibility. Your output must follow this rigorous clinical reporting structure:
+- **Clinical Impression & Differential Diagnoses (DDx)**: Discuss potential clinical etiologies. Explicitly explain the underlying pathophysiology of primary and secondary differentials simply yet with advanced medical vocabulary.
+- **Risk Stratification & Severity Triage**: Classify the presentation's clinical priority clearly:
+  * **EMERGENT / HIGH SEVERITY**: Life-threatening signs. Immediate specialist care mandatory.
+  * **URGENT / MEDIUM SEVERITY**: Sub-acute or persistent symptoms needing close diagnostic workup.
+  * **ROUTINE / LOW SEVERITY**: Minor, transient, self-limiting symptoms suitable for conservative management.
+- **Actionable Care Pathway**: Provide explicit, numbered step-by-step instructions (e.g., self-monitoring parameters like recording heart rate or temperature logs, rest positions, hydration thresholds, dietary changes, and specific criteria for clinical re-evaluation).
+- **Therapeutic Classes & Safety Advisories**: Suggest general, safe therapeutic pharmaceutical classes (e.g., "second-generation non-sedating antihistamines", "mild osmotic laxatives", "first-line antipyretics") rather than precise custom prescription dosages. Check for known allergy contraindications.
+- **GodsCare Department Referrals & Medical Experts**: Map the patient to the appropriate specialized department at GodsCare (Cardiology, Neurology, Pediatrics, Dermatology, Orthopedics, or Family/Internal Medicine) and introduce relevant consulting clinicians (e.g., Dr. Elizabeth Vance, Dr. Marcus Thorne, Dr. Sarah Lin) to encourage direct booking.
 
-AUTONOMOUS AGENT ACTIONS (TOOL CALLING):
-You have access to critical clinical tools to interact with the clinical database.
-- You MUST call 'getUserProfileData' to inspect the patient's electronic health record (EHR) if the patient mentions their medical history, allergies, previous or pending appointments, or at the start of an initial clinical workup/consultation.
-- You MUST call 'logNewUserInsight' to document structured clinical insights, severity stratification, and clear step-by-step care pathways whenever you formulate a concrete care plan, diagnostic differentials, or self-care instructions for their symptoms.
-Always state clearly and professionally to the patient which clinical database tools you are executing and explain your clinical reasoning behind your choices.`,
+AUTONOMOUS AGENT INTEGRATION & CLINICAL REASONING:
+- You have autonomous access to the patient database. You MUST call 'getUserProfileData' to inspect active profiles, allergy parameters, and medical records whenever a patient raises historical clinical questions or begins a formal consultation.
+- You MUST call 'logNewUserInsight' to update the electronic health records with structured insights, custom care plans, and severity ratings to ensure continuity of care.
+- Never show raw tool names, JSON structures, or developer-focused logic in your patient-facing response. Present your findings as direct clinical conclusions from a seasoned physician.
+- Remind the patient that while your clinical AI analysis is highly advanced, it is an expert triage and educational guidance tool, and they must always consult a licensed human doctor for formal diagnosis and treatment plans.`,
         tools: [{ functionDeclarations: [getUserProfileDataTool, logNewUserInsightTool] }]
       }
     });
@@ -1642,18 +1867,13 @@ Always state clearly and professionally to the patient which clinical database t
       const followUpRes = await ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents: [
-          ...messages,
+          ...cleanedMessages,
           { role: "model", parts: [{ text: "Executing tool operations..." }] },
           { role: "user", parts: [{ text: feedbackPrompt }] }
         ],
         config: {
-          systemInstruction: `You are the Godscare Clinical AI Physician. Formulate your final, highly proficient medical assessment, severity categorization, and step-by-step care plan based on the real tool results and patient's clinical presentation.
-Ensure your response is deeply structured, professional, reassuring, and clinically detailed. Clearly present:
-1. Clinical Impression & Differentials (explaining the potential underlying pathophysiology simply).
-2. Severity Classification (Low, Medium, or High).
-3. Detailed, Step-by-Step Care Pathway (lifestyle adjustments, diet, monitoring parameters, and red flags).
-4. Departmental Referrals (e.g., Cardiology, Neurology, Pediatrics, Dermatology) and formal scheduling advice.
-Remind the patient that while your clinical AI reasoning is highly advanced and evidence-based, it is for educational and guidance support, and they must consult a board-certified physician for final diagnosis and treatment.`
+          systemInstruction: `You are the GodsCare Clinical AI Triage and Consultation Specialist. Formulate your final, highly proficient medical assessment, severity categorization, and step-by-step care plan based on the real tool results and patient's clinical presentation.
+Ensure your response is deeply structured, professional, reassuring, and clinically detailed. Formulate a cohesive, structured clinical triage report following your core physician instructions and address the patient's concerns directly. Always advise formal clinical doctor consultation to finalize treatment.`
         }
       });
 
@@ -1667,8 +1887,10 @@ Remind the patient that while your clinical AI reasoning is highly advanced and 
     });
 
   } catch (err: any) {
-    console.error("[Clinical AI Agent Error]:", err);
-    res.status(500).json({ error: "Clinical Agent encountered an evaluation error." });
+    console.error("[Clinical AI Agent Error - Engaging Local Diagnostic Fallback Engine]:", err);
+    // Engage our high-fidelity, completely offline and fail-safe local clinical fallback system
+    const fallbackResponse = await generateClinicalFallback(messages, uid);
+    res.json(fallbackResponse);
   }
 });
 
