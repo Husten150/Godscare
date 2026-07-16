@@ -92,7 +92,7 @@ const MEDICINES = [
 
 // Initialize Paystack checkout session
 app.post("/api/payments/initialize", async (req: express.Request, res: express.Response) => {
-  const { email, amount, userId, paymentType, targetId, medicineName } = req.body;
+  const { email, amount, userId, paymentType, targetId, medicineName, origin } = req.body;
   if (!email || !amount || !userId || !paymentType) {
     res.status(400).json({ error: "Missing required billing details: email, amount, userId, paymentType." });
     return;
@@ -105,6 +105,7 @@ app.post("/api/payments/initialize", async (req: express.Request, res: express.R
   const proto = req.headers["x-forwarded-proto"] || req.protocol || "http";
   const host = req.headers["x-forwarded-host"] || req.get("host") || `localhost:${PORT}`;
   const dynamicAppUrl = `${proto}://${host}`;
+  const clientOrigin = origin || dynamicAppUrl;
 
   const hostHeader = (req.headers["x-forwarded-host"] || req.headers.host || "").toString().toLowerCase();
   const isLive = hostHeader.includes("ais-pre-") || (!hostHeader.includes("localhost") && !hostHeader.includes("127.0.0.1") && !hostHeader.includes("ais-dev-"));
@@ -125,7 +126,7 @@ app.post("/api/payments/initialize", async (req: express.Request, res: express.R
     res.json({
       status: "simulation",
       reference,
-      checkoutUrl: `/api/payments/simulate-gate?reference=${reference}&userId=${userId}&amount=${amount}&email=${encodeURIComponent(email)}&paymentType=${paymentType}&targetId=${cleanTargetId}&medicineName=${encodeURIComponent(cleanMedicineName)}`,
+      checkoutUrl: `/api/payments/simulate-gate?reference=${reference}&userId=${userId}&amount=${amount}&email=${encodeURIComponent(email)}&paymentType=${paymentType}&targetId=${cleanTargetId}&medicineName=${encodeURIComponent(cleanMedicineName)}&origin=${encodeURIComponent(clientOrigin)}`,
       message: "Sandbox billing gateway activated."
     });
     return;
@@ -144,7 +145,7 @@ app.post("/api/payments/initialize", async (req: express.Request, res: express.R
         amount: Math.round(amount * 100), // Paystack expects amount in Kobo (Naira cents)
         reference,
         channels: ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
-        callback_url: `${process.env.APP_URL || dynamicAppUrl}/api/payments/verify-callback?userId=${userId}`,
+        callback_url: `${process.env.APP_URL || dynamicAppUrl}/api/payments/verify-callback?userId=${userId}&origin=${encodeURIComponent(clientOrigin)}`,
         metadata: {
           userId,
           paymentType,
@@ -548,6 +549,7 @@ app.get("/api/payments/simulate-gate", (req: express.Request, res: express.Respo
             <!-- Persistent Cancel Button -->
             <div class="mt-4">
               <a 
+                id="cancelLink"
                 href="/"
                 class="block w-full py-2.5 text-center border border-zinc-200 text-zinc-500 rounded-xl text-xs font-mono uppercase tracking-wider hover:bg-zinc-50 transition"
               >
@@ -559,6 +561,11 @@ app.get("/api/payments/simulate-gate", (req: express.Request, res: express.Respo
         </div>
 
         <script>
+          const urlParams = new URLSearchParams(window.location.search);
+          const originParam = urlParams.get('origin') || '';
+          const redirectBase = originParam ? originParam : '';
+          document.getElementById('cancelLink').href = redirectBase || '/';
+
           // Pre-defined multi-banking cards representing various card types and brands
           const TEST_CARDS = {
             'Verve': {
@@ -803,7 +810,7 @@ app.get("/api/payments/simulate-gate", (req: express.Request, res: express.Respo
               if (result.status === 'success') {
                 btn.innerText = 'Card Approved! Redirecting...';
                 setTimeout(() => {
-                  window.location.href = '/?payment=success&type=${paymentType}&message=Authorized';
+                  window.location.href = redirectBase + '/?payment=success&type=${paymentType}&message=Authorized';
                 }, 1000);
               } else {
                 btn.innerText = 'Card Payment Failed';
@@ -875,7 +882,7 @@ app.get("/api/payments/simulate-gate", (req: express.Request, res: express.Respo
               if (result.status === 'success') {
                 btn.innerText = 'Transfer Received! Redirecting...';
                 setTimeout(() => {
-                  window.location.href = '/?payment=success&type=${paymentType}&message=TransferReceived';
+                  window.location.href = redirectBase + '/?payment=success&type=${paymentType}&message=TransferReceived';
                 }, 1000);
               } else {
                 btn.innerText = 'Verify Transfer';
@@ -927,7 +934,7 @@ app.get("/api/payments/simulate-gate", (req: express.Request, res: express.Respo
                   if (result.status === 'success') {
                     btn.innerText = 'Debit Approved! Redirecting...';
                     setTimeout(() => {
-                      window.location.href = '/?payment=success&type=${paymentType}&message=BankDebitApproved';
+                      window.location.href = redirectBase + '/?payment=success&type=${paymentType}&message=BankDebitApproved';
                     }, 1000);
                   } else {
                     btn.innerText = 'Authorize Bank Account';
@@ -984,7 +991,7 @@ app.get("/api/payments/simulate-gate", (req: express.Request, res: express.Respo
               const result = await res.json();
               if (result.status === 'success') {
                 setTimeout(() => {
-                  window.location.href = '/?payment=success&type=${paymentType}&message=USSDApproved';
+                  window.location.href = redirectBase + '/?payment=success&type=${paymentType}&message=USSDApproved';
                 }, 1000);
               } else {
                 alert('USSD authorization failed: ' + result.error);
@@ -1165,9 +1172,11 @@ app.post("/api/payments/verify", async (req: express.Request, res: express.Respo
 app.get("/api/payments/verify-callback", async (req: express.Request, res: express.Response) => {
   const reference = (req.query.reference || req.query.trxref) as string;
   const userId = req.query.userId as string;
+  const origin = req.query.origin as string || "";
+  const redirectBase = origin || "";
 
   if (!reference) {
-    res.redirect("/?payment=error&message=Missing+transaction+reference");
+    res.redirect(`${redirectBase}/?payment=error&message=Missing+transaction+reference`);
     return;
   }
 
@@ -1178,11 +1187,11 @@ app.get("/api/payments/verify-callback", async (req: express.Request, res: expre
     const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
     if (!paystackSecret || paystackSecret === "dummy_key") {
       if (isLive) {
-        res.redirect(`/?payment=error&message=${encodeURIComponent("Paystack live key is not configured. Cannot verify payment.")}`);
+        res.redirect(`${redirectBase}/?payment=error&message=${encodeURIComponent("Paystack live key is not configured. Cannot verify payment.")}`);
         return;
       }
       // Sandbox fallback
-      res.redirect(`/?payment=success&reference=${reference}`);
+      res.redirect(`${redirectBase}/?payment=success&reference=${reference}`);
       return;
     }
 
@@ -1269,14 +1278,14 @@ app.get("/api/payments/verify-callback", async (req: express.Request, res: expre
       };
       await setDoc(doc(db, "payments", payLogId), paymentLogDoc);
 
-      res.redirect(`/?payment=success&type=${finalPaymentType}&reference=${reference}`);
+      res.redirect(`${redirectBase}/?payment=success&type=${finalPaymentType}&reference=${reference}`);
     } else {
       console.warn("[Paystack Callback] Verification failed:", data.message);
-      res.redirect(`/?payment=error&message=${encodeURIComponent(data.message || "Unverified")}`);
+      res.redirect(`${redirectBase}/?payment=error&message=${encodeURIComponent(data.message || "Unverified")}`);
     }
   } catch (err: any) {
     console.error("[Paystack Callback] Verification exception:", err);
-    res.redirect(`/?payment=error&message=${encodeURIComponent(err.message || "Verification Exception")}`);
+    res.redirect(`${redirectBase}/?payment=error&message=${encodeURIComponent(err.message || "Verification Exception")}`);
   }
 });
 

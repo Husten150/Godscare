@@ -626,7 +626,8 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
           userId: userProfile.uid,
           paymentType,
           targetId: targetId || "none",
-          medicineName: medicineName || ""
+          medicineName: medicineName || "",
+          origin: window.location.origin
         })
       });
 

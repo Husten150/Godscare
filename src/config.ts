@@ -8,9 +8,7 @@ export const getApiUrl = (path: string): string => {
   if (
     hostname === "localhost" ||
     hostname === "127.0.0.1" ||
-    hostname.includes("run.app") ||
-    hostname.includes("vercel.app") ||
-    hostname.includes("vercel")
+    hostname.includes("run.app")
   ) {
     return path;
   }
