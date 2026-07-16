@@ -21,15 +21,7 @@ import {
 // Load environment variables
 dotenv.config();
 
-let currentDir = process.cwd();
-try {
-  if (import.meta && import.meta.url) {
-    currentDir = path.dirname(fileURLToPath(import.meta.url));
-  }
-} catch (e) {
-  // fallback remains process.cwd()
-}
-const resolvedDir = currentDir;
+const resolvedDir = process.cwd();
 
 export const app = express();
 const PORT = 3000;
@@ -52,10 +44,7 @@ app.use((req, res, next) => {
 let firebaseApp;
 let db: any;
 try {
-  let configPath = path.join(resolvedDir, "firebase-applet-config.json");
-  if (!fs.existsSync(configPath)) {
-    configPath = path.join(process.cwd(), "firebase-applet-config.json");
-  }
+  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
   const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
   firebaseApp = initializeApp(firebaseConfig);
   db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
@@ -1790,20 +1779,19 @@ async function seedDoctorsCollection() {
   }
 }
 
-async function startServer() {
-  // Seed the system clinicians list (asynchronously in the background to prevent Vercel invocation timeouts or cold-start blocking)
-  seedDoctorsCollection().catch(err => {
-    console.error("[Seeding Error] Background seeding failed:", err);
-  });
-
+function startServer() {
   if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
+    import("vite").then(({ createServer: createViteServer }) => {
+      createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      }).then((vite) => {
+        app.use(vite.middlewares);
+        console.log("[Server] Vite dev server mounted.");
+      });
+    }).catch((err) => {
+      console.error("[Server] Failed to load Vite dev server:", err);
     });
-    app.use(vite.middlewares);
-    console.log("[Server] Vite dev server mounted.");
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
