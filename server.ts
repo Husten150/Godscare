@@ -107,27 +107,12 @@ app.post("/api/payments/initialize", async (req: express.Request, res: express.R
   const dynamicAppUrl = `${proto}://${host}`;
   const clientOrigin = origin || dynamicAppUrl;
 
-  const hostHeader = (req.headers["x-forwarded-host"] || req.headers.host || "").toString().toLowerCase();
-  const isLive = hostHeader.includes("ais-pre-") || (!hostHeader.includes("localhost") && !hostHeader.includes("127.0.0.1") && !hostHeader.includes("ais-dev-"));
-
   const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
   const reference = `gcare-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
-  // Sandbox fallback if no secret is ready (Disabled on live site)
   if (!paystackSecret || paystackSecret === "dummy_key") {
-    if (isLive) {
-      console.error(`[Billing Live Error] Paystack live key missing on host: ${hostHeader}`);
-      res.status(400).json({
-        error: "Paystack live billing gateway is not configured. Live payments require PAYSTACK_SECRET_KEY to be set in the environment variables."
-      });
-      return;
-    }
-    console.log(`[Billing Sandbox] Generating checkout simulation for ${email}, user ${userId}`);
-    res.json({
-      status: "simulation",
-      reference,
-      checkoutUrl: `/api/payments/simulate-gate?reference=${reference}&userId=${userId}&amount=${amount}&email=${encodeURIComponent(email)}&paymentType=${paymentType}&targetId=${cleanTargetId}&medicineName=${encodeURIComponent(cleanMedicineName)}&origin=${encodeURIComponent(clientOrigin)}`,
-      message: "Sandbox billing gateway activated."
+    res.status(400).json({
+      error: "Paystack live/test billing gateway is not configured. Payments require PAYSTACK_SECRET_KEY to be set in the environment variables."
     });
     return;
   }
@@ -170,34 +155,19 @@ app.post("/api/payments/initialize", async (req: express.Request, res: express.R
       });
     } else {
       console.warn("[Paystack Error]:", data.message);
-      if (isLive) {
-        res.status(400).json({ error: `Paystack initialization failed: ${data.message}` });
-      } else {
-        res.json({
-          status: "simulation",
-          reference,
-          checkoutUrl: `/api/payments/simulate-gate?reference=${reference}&userId=${userId}&amount=${amount}&email=${encodeURIComponent(email)}&paymentType=${paymentType}&targetId=${cleanTargetId}&medicineName=${encodeURIComponent(cleanMedicineName)}`,
-          message: `Simulator activated (Paystack: ${data.message})`
-        });
-      }
+      res.status(400).json({ error: `Paystack initialization failed: ${data.message}` });
     }
   } catch (err: any) {
     console.error("[Paystack] Initialization Error:", err);
-    if (isLive) {
-      res.status(500).json({ error: `Paystack initialization error: ${err.message || err}` });
-    } else {
-      res.json({
-        status: "simulation",
-        reference,
-        checkoutUrl: `/api/payments/simulate-gate?reference=${reference}&userId=${userId}&amount=${amount}&email=${encodeURIComponent(email)}&paymentType=${paymentType}&targetId=${cleanTargetId}&medicineName=${encodeURIComponent(cleanMedicineName)}`,
-        message: "Sandbox billing gateway activated."
-      });
-    }
+    res.status(500).json({ error: `Paystack initialization error: ${err.message || err}` });
   }
 });
 
-// Serve local sandbox billing checkout simulator screen
+// Serve local sandbox billing checkout simulator screen (DISABLED)
 app.get("/api/payments/simulate-gate", (req: express.Request, res: express.Response) => {
+  res.status(403).send("The sandbox billing simulator has been disabled. Live payments are enforced.");
+  return;
+  /*
   const { reference, userId, amount, email, paymentType, targetId, medicineName } = req.query;
   const itemDesc = 
     paymentType === "premium" ? "GodsCareHospital Premium Patient Care Subscription" :
@@ -1007,11 +977,12 @@ app.get("/api/payments/simulate-gate", (req: express.Request, res: express.Respo
       </body>
     </html>
   `);
+  */
 });
 
 // Verify transaction and update records in Firestore
 app.post("/api/payments/verify", async (req: express.Request, res: express.Response) => {
-  const { reference, userId, isSimulated, amount, paymentType, targetId, medicineName } = req.body;
+  const { reference, userId, amount, paymentType, targetId, medicineName } = req.body;
   if (!reference || !userId) {
     res.status(400).json({ error: "Missing verification parameters: reference, userId." });
     return;
@@ -1025,69 +996,32 @@ app.post("/api/payments/verify", async (req: express.Request, res: express.Respo
     let finalTargetId = targetId || "none";
     let finalMedicineName = medicineName || "";
 
-    const hostHeader = (req.headers["x-forwarded-host"] || req.headers.host || "").toString().toLowerCase();
-    const isLive = hostHeader.includes("ais-pre-") || (!hostHeader.includes("localhost") && !hostHeader.includes("127.0.0.1") && !hostHeader.includes("ais-dev-"));
-
-    if (isLive) {
-      // For live sites, we MUST verify with real Paystack! No simulations or auto-verifying gcare- references.
-      const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
-      if (!paystackSecret || paystackSecret === "dummy_key") {
-        res.status(400).json({ error: "Paystack live key is not configured. Cannot verify payment." });
-        return;
+    const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackSecret || paystackSecret === "dummy_key") {
+      res.status(400).json({ error: "Paystack live key is not configured. Cannot verify payment." });
+      return;
+    }
+    const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${paystackSecret}`
       }
-      const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${paystackSecret}`
-        }
-      });
-      const data = await paystackRes.json();
-      if (data.status && data.data.status === "success") {
-        paymentVerified = true;
-        paymentAmount = data.data.amount / 100; // convert Kobo to Naira
-        currency = data.data.currency;
-        
-        // Retrieve transaction metadata
-        if (data.data.metadata) {
-          finalPaymentType = data.data.metadata.paymentType || finalPaymentType;
-          finalTargetId = data.data.metadata.targetId || finalTargetId;
-          finalMedicineName = data.data.metadata.medicineName || finalMedicineName;
-        }
-      } else {
-        res.status(400).json({ error: data.message || "Paystack reported payment was not completed." });
-        return;
+    });
+    const data = await paystackRes.json();
+    if (data.status && data.data.status === "success") {
+      paymentVerified = true;
+      paymentAmount = data.data.amount / 100; // convert Kobo to Naira
+      currency = data.data.currency;
+      
+      // Retrieve transaction metadata
+      if (data.data.metadata) {
+        finalPaymentType = data.data.metadata.paymentType || finalPaymentType;
+        finalTargetId = data.data.metadata.targetId || finalTargetId;
+        finalMedicineName = data.data.metadata.medicineName || finalMedicineName;
       }
     } else {
-      // Dev/Sandbox environments can use the simulation fallback
-      if (isSimulated || reference.startsWith("gcare-") || !process.env.PAYSTACK_SECRET_KEY) {
-        paymentVerified = true;
-        console.log(`[Billing Sandbox] Verifying simulation payment for ${userId} (Type: ${finalPaymentType})`);
-      } else {
-        // Call actual Paystack API to verify
-        const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
-        const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-          method: "GET",
-          headers: {
-            "Authorization": `Bearer ${paystackSecret}`
-          }
-        });
-        const data = await paystackRes.json();
-        if (data.status && data.data.status === "success") {
-          paymentVerified = true;
-          paymentAmount = data.data.amount / 100; // convert Kobo to Naira
-          currency = data.data.currency;
-          
-          // Retrieve transaction metadata
-          if (data.data.metadata) {
-            finalPaymentType = data.data.metadata.paymentType || finalPaymentType;
-            finalTargetId = data.data.metadata.targetId || finalTargetId;
-            finalMedicineName = data.data.metadata.medicineName || finalMedicineName;
-          }
-        } else {
-          res.status(400).json({ error: data.message || "Paystack reported payment was not completed." });
-          return;
-        }
-      }
+      res.status(400).json({ error: data.message || "Paystack reported payment was not completed." });
+      return;
     }
 
     if (paymentVerified) {
@@ -1181,17 +1115,9 @@ app.get("/api/payments/verify-callback", async (req: express.Request, res: expre
   }
 
   try {
-    const hostHeader = (req.headers["x-forwarded-host"] || req.headers.host || "").toString().toLowerCase();
-    const isLive = hostHeader.includes("ais-pre-") || (!hostHeader.includes("localhost") && !hostHeader.includes("127.0.0.1") && !hostHeader.includes("ais-dev-"));
-
     const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
     if (!paystackSecret || paystackSecret === "dummy_key") {
-      if (isLive) {
-        res.redirect(`${redirectBase}/?payment=error&message=${encodeURIComponent("Paystack live key is not configured. Cannot verify payment.")}`);
-        return;
-      }
-      // Sandbox fallback
-      res.redirect(`${redirectBase}/?payment=success&reference=${reference}`);
+      res.redirect(`${redirectBase}/?payment=error&message=${encodeURIComponent("Paystack live key is not configured. Cannot verify payment.")}`);
       return;
     }
 
