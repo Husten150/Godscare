@@ -78,6 +78,15 @@ const ai = new GoogleGenAI({
 // PAYMENT GATEWAY API (PAYSTACK)
 // ==========================================
 
+// Paystack Helper with fallback to live key provided by user
+const getPaystackSecretKey = (): string => {
+  const envKey = process.env.PAYSTACK_SECRET_KEY;
+  if (envKey && envKey !== "dummy_key" && envKey.trim() !== "") {
+    return envKey.trim();
+  }
+  return "sk_live_d53b80bf69d2f8d14550eb8affa1539a9ec1ccbd";
+};
+
 const MEDICINES = [
   { id: "med-1", name: "Paracetamol BP 500mg", category: "mild", symptoms: ["Mild Fever", "Headache", "Minor Pain", "Body Ache"], description: "Effective relief for minor fever, headaches, and general body fatigue.", price: 1000 },
   { id: "med-2", name: "Cetirizine Hydrochloride 10mg", category: "mild", symptoms: ["Running Nose", "Sneezing", "Allergy", "Itchy Eyes"], description: "Non-drowsy antihistamine for quick allergy relief, rhinitis, and hives.", price: 1200 },
@@ -107,10 +116,10 @@ app.post("/api/payments/initialize", async (req: express.Request, res: express.R
   const dynamicAppUrl = `${proto}://${host}`;
   const clientOrigin = origin || dynamicAppUrl;
 
-  const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+  const paystackSecret = getPaystackSecretKey();
   const reference = `gcare-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
-  if (!paystackSecret || paystackSecret === "dummy_key") {
+  if (!paystackSecret) {
     res.status(400).json({
       error: "Paystack live/test billing gateway is not configured. Payments require PAYSTACK_SECRET_KEY to be set in the environment variables."
     });
@@ -996,8 +1005,8 @@ app.post("/api/payments/verify", async (req: express.Request, res: express.Respo
     let finalTargetId = targetId || "none";
     let finalMedicineName = medicineName || "";
 
-    const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
-    if (!paystackSecret || paystackSecret === "dummy_key") {
+    const paystackSecret = getPaystackSecretKey();
+    if (!paystackSecret) {
       res.status(400).json({ error: "Paystack live key is not configured. Cannot verify payment." });
       return;
     }
@@ -1115,8 +1124,8 @@ app.get("/api/payments/verify-callback", async (req: express.Request, res: expre
   }
 
   try {
-    const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
-    if (!paystackSecret || paystackSecret === "dummy_key") {
+    const paystackSecret = getPaystackSecretKey();
+    if (!paystackSecret) {
       res.redirect(`${redirectBase}/?payment=error&message=${encodeURIComponent("Paystack live key is not configured. Cannot verify payment.")}`);
       return;
     }
@@ -1782,8 +1791,10 @@ async function seedDoctorsCollection() {
 }
 
 async function startServer() {
-  // Seed the system clinicians list
-  await seedDoctorsCollection();
+  // Seed the system clinicians list (asynchronously in the background to prevent Vercel invocation timeouts or cold-start blocking)
+  seedDoctorsCollection().catch(err => {
+    console.error("[Seeding Error] Background seeding failed:", err);
+  });
 
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
