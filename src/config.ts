@@ -4,15 +4,5 @@
  * Otherwise (e.g., deployed on Vercel), route requests to the absolute Cloud Run backend URL.
  */
 export const getApiUrl = (path: string): string => {
-  const hostname = window.location.hostname;
-  if (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname.includes("run.app")
-  ) {
-    return path;
-  }
-  // Target active Cloud Run dev container as the backend service
-  const base = "https://ais-dev-2djaao225qtzufpsfgx4z7-143923848108.europe-west3.run.app";
-  return `${base}${path}`;
+  return path;
 };
