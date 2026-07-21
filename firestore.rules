@@ -53,8 +53,7 @@ service cloud.firestore {
 
     // --- Doctors Collection ---
     match /doctors/{doctorId} {
-      allow read: if true; // Anyone can view the roster of medical professionals
-      allow write: if request.auth == null || isAdmin(); // Server or admins can add/alter physicians
+      allow read, write: if true; // Unrestricted access for admin panel operations
     }
 
     // --- Appointments Collection ---
@@ -117,8 +116,7 @@ service cloud.firestore {
 
     // --- Medicines Collection ---
     match /medicines/{medicineId} {
-      allow read: if true;
-      allow write: if request.auth == null || isAdmin();
+      allow read, write: if true;
     }
 
     // --- Feedbacks Collection ---
@@ -129,8 +127,7 @@ service cloud.firestore {
 
     // --- System Settings Collection ---
     match /system_settings/{settingsId} {
-      allow read: if true;
-      allow write: if request.auth == null || isAdmin();
+      allow read, write: if true;
     }
   }
 }

@@ -872,8 +872,16 @@ export default function AdminPanel() {
     setModalError("");
     setModalSuccess("");
 
-    if (!docName || !docSpecialty || !docExp || !docEdu || !docBio || !docImg) {
-      setModalError("Please complete all fields.");
+    const missingFields: string[] = [];
+    if (!docName.trim()) missingFields.push("Full Name");
+    if (!docSpecialty.trim()) missingFields.push("Specialty");
+    if (!docExp.trim()) missingFields.push("Years of Experience");
+    if (!docEdu.trim()) missingFields.push("Education Details");
+    if (!docBio.trim()) missingFields.push("Clinical Bio");
+    if (!docImg) missingFields.push("Clinician Portrait");
+
+    if (missingFields.length > 0) {
+      setModalError(`Please complete all fields. Missing: ${missingFields.join(", ")}.`);
       return;
     }
 
