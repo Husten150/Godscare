@@ -740,22 +740,66 @@ export default function AdminPanel() {
     setShowDoctorModal(true);
   };
 
-  // File upload and drag-and-drop handlers for Doctor profile images
-  const handleDoctorImgFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (!file.type.startsWith("image/")) {
-        setModalError("Please select a valid image file.");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === "string") {
-          setDocImg(reader.result);
+  // File upload and drag-and-drop handlers for Doctor profile images with automatic canvas-based compression
+  const compressAndSetDoctorImage = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setModalError("Please select or drop a valid image file.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX_WIDTH = 400;
+        const MAX_HEIGHT = 400;
+        let width = img.width;
+        let height = img.height;
+
+        // Scale preserving aspect ratio
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          // Compress to JPEG with high/medium quality to keep the document size around 15KB-30KB
+          const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.75);
+          setDocImg(compressedDataUrl);
+          setModalError("");
+        } else {
+          setDocImg(event.target?.result as string);
           setModalError("");
         }
       };
-      reader.readAsDataURL(file);
+      img.onerror = () => {
+        setModalError("Failed to load and resize the image.");
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      setModalError("Could not read the uploaded file.");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDoctorImgFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      compressAndSetDoctorImage(file);
     }
   };
 
@@ -775,18 +819,7 @@ export default function AdminPanel() {
     setDragActive(false);
     const file = e.dataTransfer.files?.[0];
     if (file) {
-      if (!file.type.startsWith("image/")) {
-        setModalError("Please drop a valid image file.");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === "string") {
-          setDocImg(reader.result);
-          setModalError("");
-        }
-      };
-      reader.readAsDataURL(file);
+      compressAndSetDoctorImage(file);
     }
   };
 
@@ -815,8 +848,8 @@ export default function AdminPanel() {
         experience: docExp,
         education: docEdu,
         rating: parseFloat(docRating.toString()) || 4.9,
-        availableDays: editingDoctor ? editingDoctor.availableDays : ["Monday", "Wednesday", "Friday"],
-        availableHours: editingDoctor ? editingDoctor.availableHours : ["09:00 AM", "11:00 AM", "02:00 PM", "03:30 PM"],
+        availableDays: (editingDoctor && editingDoctor.availableDays) ? editingDoctor.availableDays : ["Monday", "Wednesday", "Friday"],
+        availableHours: (editingDoctor && editingDoctor.availableHours) ? editingDoctor.availableHours : ["09:00 AM", "11:00 AM", "02:00 PM", "03:30 PM"],
         image: docImg,
         bio: docBio
       };
