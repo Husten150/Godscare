@@ -752,8 +752,8 @@ export default function AdminPanel() {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        const MAX_WIDTH = 400;
-        const MAX_HEIGHT = 400;
+        const MAX_WIDTH = 350;
+        const MAX_HEIGHT = 350;
         let width = img.width;
         let height = img.height;
 
@@ -776,8 +776,8 @@ export default function AdminPanel() {
         
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          // Compress to JPEG with high/medium quality to keep the document size around 15KB-30KB
-          const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.75);
+          // Compress to JPEG with medium-high quality to keep the document size around 15KB-20KB
+          const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.7);
           setDocImg(compressedDataUrl);
           setModalError("");
         } else {
@@ -794,6 +794,47 @@ export default function AdminPanel() {
       setModalError("Could not read the uploaded file.");
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleDirectUrlChange = (val: string) => {
+    if (val.startsWith("data:image/") && val.length > 80000) {
+      // If they pasted a huge base64 image data URL directly, compress it!
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX_WIDTH = 350;
+        const MAX_HEIGHT = 350;
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL("image/jpeg", 0.7);
+          setDocImg(compressed);
+        } else {
+          setDocImg(val);
+        }
+      };
+      img.onerror = () => {
+        setDocImg(val);
+      };
+      img.src = val;
+    } else {
+      setDocImg(val);
+    }
   };
 
   const handleDoctorImgFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1973,7 +2014,11 @@ export default function AdminPanel() {
                     
                     <div className="flex flex-col sm:flex-row gap-4 items-center">
                       {/* Left: Interactive Preview */}
-                      <div className="relative w-24 h-24 sm:w-28 sm:h-28 bg-white border border-zinc-200 rounded-xl overflow-hidden flex items-center justify-center shadow-xs flex-shrink-0 group" id="doctor-photo-preview-box">
+                      <div 
+                        onClick={() => document.getElementById("doctor-photo-upload")?.click()}
+                        className="relative w-24 h-24 sm:w-28 sm:h-28 bg-white border border-zinc-200 rounded-xl overflow-hidden flex items-center justify-center shadow-xs flex-shrink-0 group cursor-pointer hover:border-emerald-400 hover:shadow-md transition-all" 
+                        id="doctor-photo-preview-box"
+                      >
                         {docImg ? (
                           <>
                             <img 
@@ -2031,7 +2076,7 @@ export default function AdminPanel() {
                         type="text"
                         placeholder="Pasted Unsplash/web image URL"
                         value={docImg}
-                        onChange={(e) => setDocImg(e.target.value)}
+                        onChange={(e) => handleDirectUrlChange(e.target.value)}
                         className="w-full px-3 py-1.5 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-450 font-sans"
                         id="doctor-photo-url-input"
                       />
