@@ -36,7 +36,9 @@ import {
   Hospital,
   Pill,
   CreditCard,
-  Mail
+  Mail,
+  Upload,
+  Camera
 } from "lucide-react";
 
 export default function AdminPanel() {
@@ -63,6 +65,7 @@ export default function AdminPanel() {
   const [docRating, setDocRating] = React.useState(5.0);
   const [docBio, setDocBio] = React.useState("");
   const [docImg, setDocImg] = React.useState("");
+  const [dragActive, setDragActive] = React.useState(false);
   const [modalError, setModalError] = React.useState("");
   const [modalSuccess, setModalSuccess] = React.useState("");
   const [modalLoading, setModalLoading] = React.useState(false);
@@ -735,6 +738,56 @@ export default function AdminPanel() {
     setModalError("");
     setModalSuccess("");
     setShowDoctorModal(true);
+  };
+
+  // File upload and drag-and-drop handlers for Doctor profile images
+  const handleDoctorImgFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        setModalError("Please select a valid image file.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") {
+          setDocImg(reader.result);
+          setModalError("");
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleDoctorImgDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDoctorImgDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        setModalError("Please drop a valid image file.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") {
+          setDocImg(reader.result);
+          setModalError("");
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Submit Doctor Add / Edit Form
@@ -1881,17 +1934,75 @@ export default function AdminPanel() {
                     />
                   </div>
 
-                  {/* Image URL */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Photo URL</label>
-                    <input
-                      type="text"
-                      placeholder="Unsplash URL"
-                      value={docImg}
-                      onChange={(e) => setDocImg(e.target.value)}
-                      className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-450"
-                      required
-                    />
+                  {/* Photo Uploader Section */}
+                  <div className="sm:col-span-2 space-y-2 border border-zinc-100 rounded-xl p-4 bg-zinc-50/50" id="doctor-photo-uploader-container">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 block">Clinician Portrait</span>
+                    
+                    <div className="flex flex-col sm:flex-row gap-4 items-center">
+                      {/* Left: Interactive Preview */}
+                      <div className="relative w-24 h-24 sm:w-28 sm:h-28 bg-white border border-zinc-200 rounded-xl overflow-hidden flex items-center justify-center shadow-xs flex-shrink-0 group" id="doctor-photo-preview-box">
+                        {docImg ? (
+                          <>
+                            <img 
+                              src={docImg} 
+                              alt="Doctor portrait preview" 
+                              referrerPolicy="no-referrer" 
+                              className="w-full h-full object-cover transition-all group-hover:scale-105" 
+                              id="doctor-photo-preview-img"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <span className="text-[9px] text-white font-semibold uppercase tracking-wider">Change Photo</span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-center p-3 flex flex-col items-center justify-center">
+                            <Camera className="h-6 w-6 text-zinc-300 mb-1" />
+                            <span className="text-[8px] font-medium text-zinc-400 uppercase tracking-wider leading-tight">No Photo</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right: Drag & Drop Zone */}
+                      <div 
+                        onDragEnter={handleDoctorImgDrag}
+                        onDragOver={handleDoctorImgDrag}
+                        onDragLeave={handleDoctorImgDrag}
+                        onDrop={handleDoctorImgDrop}
+                        onClick={() => document.getElementById("doctor-photo-upload")?.click()}
+                        className={`flex-1 w-full border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-all min-h-[96px] ${
+                          dragActive 
+                            ? "border-emerald-500 bg-emerald-50 text-emerald-700" 
+                            : "border-zinc-200 hover:border-zinc-300 bg-white hover:bg-zinc-50"
+                        }`}
+                        id="doctor-photo-drag-drop-zone"
+                      >
+                        <Upload className={`h-5 w-5 mb-1.5 transition-colors ${dragActive ? "text-emerald-500 animate-bounce" : "text-zinc-400"}`} />
+                        <p className="text-[11px] font-semibold text-zinc-700">
+                          Drag & drop picture, or <span className="text-emerald-600 hover:text-emerald-500 underline decoration-solid">browse</span>
+                        </p>
+                        <p className="text-[9px] text-zinc-400 mt-1">Supports PNG, JPG, or WebP (Max 1MB)</p>
+                        <input 
+                          type="file" 
+                          id="doctor-photo-upload" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={handleDoctorImgFileChange} 
+                        />
+                      </div>
+                    </div>
+
+                    {/* Alternative: Direct Image URL */}
+                    <div className="pt-2 border-t border-zinc-100/80 space-y-1">
+                      <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400 block">Alternative: Direct Image URL</label>
+                      <input
+                        type="text"
+                        placeholder="Pasted Unsplash/web image URL"
+                        value={docImg}
+                        onChange={(e) => setDocImg(e.target.value)}
+                        className="w-full px-3 py-1.5 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-450 font-sans"
+                        id="doctor-photo-url-input"
+                      />
+                    </div>
                   </div>
 
                   {/* Bio */}

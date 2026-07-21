@@ -1799,39 +1799,107 @@ app.post("/api/gemini/agent", async (req: express.Request, res: express.Response
       cleanedMessages = [{ role: "user", parts: [{ text: "Hello" }] }];
     }
 
-    // 1. Initial tool-calling pass with the Gemini 3.5 Flash model
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: cleanedMessages,
-      config: {
-        systemInstruction: `You are the "GodsCare Clinical AI Triage and Consultation Specialist", a board-certified Clinical AI Physician and Medical Specialist designed for professional medical triage, comprehensive history taking, clinical diagnostic risk-stratification, and structured patient care plan guidance.
+    // Extract the latest user message text to classify the intent
+    let latestText = "";
+    for (let i = cleanedMessages.length - 1; i >= 0; i--) {
+      if (cleanedMessages[i].role === "user") {
+        const parts = cleanedMessages[i].parts;
+        if (parts && parts.length > 0) {
+          latestText = parts.map((p: any) => p.text || "").join(" ").trim();
+          break;
+        }
+      }
+    }
+
+    if (!latestText) {
+      latestText = "Hello";
+    }
+
+    // 1. Differentiate between Medical diagnostic / triage requests and Conversational / General / Technical requests
+    let isMedicalEvent = false;
+    try {
+      const classificationResult = await ai.models.generateContent({
+        model: "gemini-3.1-flash-lite",
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: `You are an extremely precise and sensitive AI classifier designed to distinguish between explicit requests for clinical/medical diagnosis or clinical triage of symptoms, and all other casual, technical, or general inquiries.
+
+Analyze this user query: "${latestText}"
+
+Follow these rules for classification:
+1. Classify as "MEDICAL_TRIAGE" ONLY if the user is explicitly seeking a medical diagnosis, describing physical or mental symptoms to understand their severity/causes, or requesting triage/treatment instructions for clinical health issues (e.g. "I have a chest burn", "experiencing chest pain", "fever and fatigue for 2 days", "chronic headache", "dizziness").
+2. Classify as "GENERAL_CONVERSATIONAL" for any:
+   - Greetings, casual chat, or social questions (e.g. "Hello", "How are you", "Thanks").
+   - Technical questions or colloquial figures of speech (e.g. "My server is on fire", "Fix my react bug", "The website is broken").
+   - Minor, non-systemic, or self-limiting physical events that only require general everyday advice or first aid rather than diagnostic assessment or medical database logging (e.g. "I have a burn on my hand from cooking, how to clean it?", "how to put on a band-aid").
+   - General non-clinical inquiries about GodsCare (e.g. "Where is the clinic?", "Who are the doctors?").
+
+Respond with EXACTLY one word: "MEDICAL_TRIAGE" or "GENERAL_CONVERSATIONAL". Do not include any other text or punctuation.`
+              }
+            ]
+          }
+        ],
+        config: {
+          temperature: 0.1,
+        }
+      });
+
+      const classificationResponseText = classificationResult.text?.trim().toUpperCase() || "";
+      isMedicalEvent = classificationResponseText.includes("MEDICAL_TRIAGE");
+      console.log(`[Clinical Agent Classifier] Query classified as: ${classificationResponseText} (isMedicalEvent: ${isMedicalEvent})`);
+    } catch (classErr: any) {
+      console.warn("[Clinical Agent Classifier Error] Defaulting classification to false:", classErr?.message || classErr);
+      isMedicalEvent = false;
+    }
+
+    // Choose prompt template based on classification
+    let systemInstruction = "";
+    let tools: any[] | undefined = undefined;
+
+    if (isMedicalEvent) {
+      // Set the clinical specialist prompt, but REMOVE forced fixed formatting templates
+      systemInstruction = `You are the "GodsCare Machine Learning Clinical AI Triage and Consultation Specialist", a board-certified Clinical AI Physician and Medical Specialist designed for professional medical triage, comprehensive history taking, clinical diagnostic risk-stratification, and structured patient care plan guidance.
 
 Your demeanor is that of an elite, senior consulting physician: exceptionally clinical, precise, deeply analytical, deeply empathetic yet strictly objective, calm, and highly professional. Your tone is serious, authoritative, and scientific, maintaining impeccable medical professionalism (bedside manner) with zero casual phrases, zero hype, and no colloquial expressions.
 
 CLINICAL TRIAGE & HISTORY-TAKING PROTOCOLS:
-1. Systematic Intake Assessment: Treat the patient's initial input as a clinical presentation. You must not jump to superficial conclusions or offer basic generic suggestions immediately. Conduct a structured clinical history interview using the OPQRST-AS (Onset, Provocation/Palliation, Quality, Radiation, Severity 1-10, Temporal factors, Associated Symptoms) clinical framework to characterize their symptoms thoroughly.
-2. Clinical History Review: Check and review the patient's past medical history, active medications, and documented allergies. Always cross-reference this information to customize your clinical suggestions and guarantee pharmacological safety (e.g., checking if suggested therapeutic classes conflict with their allergies).
+1. Systematic Intake Assessment: Treat the patient's initial input as a clinical presentation. Conduct a structured clinical history interview using the OPQRST-AS (Onset, Provocation/Palliation, Quality, Radiation, Severity 1-10, Temporal factors, Associated Symptoms) clinical framework to characterize their symptoms thoroughly.
+2. Clinical History Review: Check and review the patient's past medical history, active medications, and documented allergies. Always cross-reference this information to customize your clinical suggestions and guarantee pharmacological safety.
 3. Red Flag Detection & Emergency Triage:
    - Perform an immediate safety audit on every message. If the patient presents life-threatening or urgent cardiorespiratory, neurological, or systemic signs (e.g., acute crushing chest pain, dyspnea/shortness of breath, focal deficits like unilateral weakness, slurred speech, facial drooping, severe anaphylaxis, or worst headache of their life), immediately trigger the Emergency Triage protocol.
-   - For Emergency Triage: Issue a prominent, serious, and supportive alert instructing them to call emergency services (e.g., 911 or localized ambulance) or proceed to the nearest Emergency Department immediately. Provide physiological reasons (e.g., myocardial ischemia, acute cerebrovascular event) clearly and calmly to keep the patient safe and informed.
+   - For Emergency Triage: Issue a prominent, serious, and supportive alert instructing them to call emergency services (e.g., 911 or localized ambulance) or proceed to the nearest Emergency Department immediately. Provide physiological reasons clearly and calmly to keep the patient safe and informed.
 
-STRUCTURED DEEP-CLINICAL OUTPUT FORMATTING:
-Every comprehensive response must be elegantly organized using professional markdown headers, lists, and tables (as appropriate) for maximum legibility. Your output must follow this rigorous clinical reporting structure:
-- **Clinical Impression & Differential Diagnoses (DDx)**: Discuss potential clinical etiologies. Explicitly explain the underlying pathophysiology of primary and secondary differentials simply yet with advanced medical vocabulary.
-- **Risk Stratification & Severity Triage**: Classify the presentation's clinical priority clearly:
-  * **EMERGENT / HIGH SEVERITY**: Life-threatening signs. Immediate specialist care mandatory.
-  * **URGENT / MEDIUM SEVERITY**: Sub-acute or persistent symptoms needing close diagnostic workup.
-  * **ROUTINE / LOW SEVERITY**: Minor, transient, self-limiting symptoms suitable for conservative management.
-- **Actionable Care Pathway**: Provide explicit, numbered step-by-step instructions (e.g., self-monitoring parameters like recording heart rate or temperature logs, rest positions, hydration thresholds, dietary changes, and specific criteria for clinical re-evaluation).
-- **Therapeutic Classes & Safety Advisories**: Suggest general, safe therapeutic pharmaceutical classes (e.g., "second-generation non-sedating antihistamines", "mild osmotic laxatives", "first-line antipyretics") rather than precise custom prescription dosages. Check for known allergy contraindications.
-- **GodsCare Department Referrals & Medical Experts**: Map the patient to the appropriate specialized department at GodsCare (Cardiology, Neurology, Pediatrics, Dermatology, Orthopedics, or Family/Internal Medicine) and introduce relevant consulting clinicians (e.g., Dr. Elizabeth Vance, Dr. Marcus Thorne, Dr. Sarah Lin) to encourage direct booking.
+FORMATTING AND OUTPUT STYLE:
+Organize your professional medical response clearly and beautifully using standard markdown headers, lists, and tables (as appropriate) for maximum legibility. Deliver clinical impressions, diagnostic differentials, risk levels (Emergent, Urgent, or Routine), actionable care steps, safe general therapeutic drug classes, and department recommendations naturally, professionally, and in a deeply clinical, diagnostic-focused manner without being constrained by rigid header templates.
 
 AUTONOMOUS AGENT INTEGRATION & CLINICAL REASONING:
 - You have autonomous access to the patient database. You MUST call 'getUserProfileData' to inspect active profiles, allergy parameters, and medical records whenever a patient raises historical clinical questions or begins a formal consultation.
 - You MUST call 'logNewUserInsight' to update the electronic health records with structured insights, custom care plans, and severity ratings to ensure continuity of care.
 - Never show raw tool names, JSON structures, or developer-focused logic in your patient-facing response. Present your findings as direct clinical conclusions from a seasoned physician.
-- Remind the patient that while your clinical AI analysis is highly advanced, it is an expert triage and educational guidance tool, and they must always consult a licensed human doctor for formal diagnosis and treatment plans.`,
-        tools: [{ functionDeclarations: [getUserProfileDataTool, logNewUserInsightTool] }]
+- Remind the patient that while your clinical AI analysis is highly advanced, it is an expert triage and educational guidance tool, and they must always consult a licensed human doctor for formal diagnosis and treatment plans.`;
+
+      tools = [getUserProfileDataTool, logNewUserInsightTool];
+    } else {
+      // Set the standard conversational helpful persona
+      systemInstruction = `You are a helpful and polite virtual assistant for GodsCare.
+Adopt a friendly, standard conversational, and helpful tone.
+You are NOT acting as the Clinical AI Specialist right now because the user is not making a medical diagnosis or triage request.
+Provide helpful, standard conversational guidance, answer their casual or technical questions directly, and guide them politely as a customer support representative or friendly coordinator for GodsCare.
+Do NOT output clinical diagnosis reports, clinical structured metrics, differentials, or care plans, and do NOT attempt to invoke any clinical database tools.`;
+
+      tools = undefined;
+    }
+
+    // 2. Initial pass with the Gemini 3.1 Flash-Lite model
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-lite",
+      contents: cleanedMessages,
+      config: {
+        systemInstruction: systemInstruction,
+        ...(tools ? { tools: [{ functionDeclarations: tools }] } : {})
       }
     });
 
@@ -1839,8 +1907,8 @@ AUTONOMOUS AGENT INTEGRATION & CLINICAL REASONING:
     const thoughts: any[] = [];
     let finalModelOutput = response.text || "";
 
-    // 2. Execute the Agentic loop if Gemini requests tools
-    if (functionCalls && functionCalls.length > 0) {
+    // 3. Execute the Agentic loop if Gemini requests tools (only possible in MEDICAL_TRIAGE mode)
+    if (isMedicalEvent && functionCalls && functionCalls.length > 0) {
       console.log(`[Clinical AI Agent] Model requested tools: ${JSON.stringify(functionCalls)}`);
       
       const toolResultsPrompts: string[] = [];
@@ -1861,18 +1929,18 @@ AUTONOMOUS AGENT INTEGRATION & CLINICAL REASONING:
         }
       }
 
-      // 3. Make a follow-up call to Gemini, feeding the results of its autonomous actions
+      // 4. Make a follow-up call to Gemini, feeding the results of its autonomous actions
       const feedbackPrompt = `I have autonomously executed the requested tool(s) in the Firestore environment. Here are the real results of the tool operations:\n\n${toolResultsPrompts.join("\n\n")}\n\nFormulate your final response to the patient based on this data. Acknowledge your tool executions.`;
       
       const followUpRes = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-3.1-flash-lite",
         contents: [
           ...cleanedMessages,
           { role: "model", parts: [{ text: "Executing tool operations..." }] },
           { role: "user", parts: [{ text: feedbackPrompt }] }
         ],
         config: {
-          systemInstruction: `You are the GodsCare Clinical AI Triage and Consultation Specialist. Formulate your final, highly proficient medical assessment, severity categorization, and step-by-step care plan based on the real tool results and patient's clinical presentation.
+          systemInstruction: `You are the GodsCare Machine Learning Clinical AI Triage and Consultation Specialist. Formulate your final, highly proficient medical assessment, severity categorization, and step-by-step care plan based on the real tool results and patient's clinical presentation.
 Ensure your response is deeply structured, professional, reassuring, and clinically detailed. Formulate a cohesive, structured clinical triage report following your core physician instructions and address the patient's concerns directly. Always advise formal clinical doctor consultation to finalize treatment.`
         }
       });
@@ -1887,7 +1955,8 @@ Ensure your response is deeply structured, professional, reassuring, and clinica
     });
 
   } catch (err: any) {
-    console.error("[Clinical AI Agent Error - Engaging Local Diagnostic Fallback Engine]:", err);
+    const errMsg = err?.message || String(err);
+    console.warn(`[Clinical AI Agent - API Notice]: Utilizing local fallback pipeline. Reason: ${errMsg.substring(0, 150)}`);
     // Engage our high-fidelity, completely offline and fail-safe local clinical fallback system
     const fallbackResponse = await generateClinicalFallback(messages, uid);
     res.json(fallbackResponse);

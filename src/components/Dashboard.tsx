@@ -75,12 +75,47 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
   // AI Agent States
   const [aiLoading, setAiLoading] = React.useState(false);
   const [aiInput, setAiInput] = React.useState("");
-  const [aiChatMessages, setAiChatMessages] = React.useState<{role: "user" | "model", text: string, thoughts?: any[]}[]>([
-    {
-      role: "model",
-      text: "Welcome to GodsCareHospital Autonomous Consultation Hub. I am your Clinical AI Agent, equipped with deep diagnostics tool execution capabilities. I can inspect your clinical history, analyze files, and autonomously log custom Care Pathways directly to your patient profile. What symptoms or questions do you have today?"
+  const [aiChatMessages, setAiChatMessages] = React.useState<{role: "user" | "model", text: string, thoughts?: any[]}[]>(() => {
+    try {
+      const saved = sessionStorage.getItem(`godscare_chat_history_${userProfile.uid}`);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn("Failed to load chat history from session:", e);
     }
-  ]);
+    return [
+      {
+        role: "model",
+        text: "Welcome to GodsCareHospital Autonomous Consultation Hub. I am your Clinical AI Agent, equipped with deep diagnostics tool execution capabilities. I can inspect your clinical history, analyze files, and autonomously log custom Care Pathways directly to your patient profile. What symptoms or questions do you have today?"
+      }
+    ];
+  });
+  const [isChatOpen, setIsChatOpen] = React.useState(false);
+  const [bubbleInput, setBubbleInput] = React.useState("");
+
+  const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  const bubbleMessagesEndRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    try {
+      sessionStorage.setItem(`godscare_chat_history_${userProfile.uid}`, JSON.stringify(aiChatMessages));
+    } catch (e) {
+      console.warn("Failed to save chat history to session:", e);
+    }
+  }, [aiChatMessages, userProfile.uid]);
+
+  React.useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [aiChatMessages]);
+
+  React.useEffect(() => {
+    if (isChatOpen) {
+      setTimeout(() => {
+        bubbleMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 50);
+    }
+  }, [aiChatMessages, isChatOpen]);
 
   // Medical History states
   const [medicalHistory, setMedicalHistory] = React.useState<MedicalHistory | null>(null);
@@ -654,16 +689,12 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
     await handleCheckoutPayment("premium", premiumFee);
   };
 
-  // AI Agent message handler with autonomous tool updates
-  const handleSendAiMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (aiLoading || !aiInput.trim()) return;
+  // Core send function shared between the main tab and the floating bubble
+  const sendClinicalMessage = async (text: string) => {
+    if (aiLoading || !text.trim()) return;
 
-    const userText = aiInput.trim();
-    setAiInput("");
     setAiLoading(true);
-
-    const updatedMessages = [...aiChatMessages, { role: "user" as const, text: userText }];
+    const updatedMessages = [...aiChatMessages, { role: "user" as const, text: text.trim() }];
     setAiChatMessages(updatedMessages);
 
     try {
@@ -682,27 +713,22 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
       });
 
       const data = await res.json();
-      if (data.text) {
-        setAiChatMessages(prev => [
-          ...prev,
-          { 
-            role: "model" as const, 
-            text: data.text, 
-            thoughts: data.thoughts 
-          }
-        ]);
-
-        // If tools executed (like writing insights to Firestore), refresh lists dynamically
-        if (data.thoughts && data.thoughts.some((t: any) => t.action === "logNewUserInsight")) {
-          setTimeout(() => {
-            loadDashboardData();
-          }, 1500);
+      const textToDisplay = data.text || data.message || "I have received and processed your clinical parameters. Let me know how I can assist you further or if you'd like to check specialized department resources.";
+      
+      setAiChatMessages(prev => [
+        ...prev,
+        { 
+          role: "model" as const, 
+          text: textToDisplay, 
+          thoughts: data.thoughts 
         }
-      } else {
-        setAiChatMessages(prev => [
-          ...prev,
-          { role: "model" as const, text: "The clinical model encountered an evaluation error. Please try restating your symptom." }
-        ]);
+      ]);
+
+      // If tools executed (like writing insights to Firestore), refresh lists dynamically
+      if (data.thoughts && data.thoughts.some((t: any) => t.action === "logNewUserInsight")) {
+        setTimeout(() => {
+          loadDashboardData();
+        }, 1500);
       }
     } catch (err) {
       console.error("[Clinical AI Error]:", err);
@@ -713,6 +739,24 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
     } finally {
       setAiLoading(false);
     }
+  };
+
+  // Main tab form submit
+  const handleSendAiMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiInput.trim() || aiLoading) return;
+    const text = aiInput.trim();
+    setAiInput("");
+    await sendClinicalMessage(text);
+  };
+
+  // Floating bubble form submit
+  const handleSendBubbleMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bubbleInput.trim() || aiLoading) return;
+    const text = bubbleInput.trim();
+    setBubbleInput("");
+    await sendClinicalMessage(text);
   };
 
   return (
@@ -1502,6 +1546,7 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
                         <span>AI Agent is executing clinical handshakes...</span>
                       </div>
                     )}
+                    <div ref={messagesEndRef} />
                   </div>
 
                   {/* Input Form */}
@@ -2281,6 +2326,117 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
               </div>
 
             </div>
+          </div>
+        )}
+
+        {/* Persistent Floating Chat Bubble Button */}
+        {!isChatOpen && (
+          <button
+            onClick={() => setIsChatOpen(true)}
+            className="fixed bottom-6 right-6 z-50 p-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full shadow-2xl transition-all duration-300 hover:scale-110 flex items-center justify-center cursor-pointer group border border-emerald-500/30"
+            title="Open Clinical AI Partner"
+            id="clinical-ai-bubble-btn"
+          >
+            <div className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-white"></span>
+            </div>
+            <Sparkles className="h-6 w-6 text-emerald-100 group-hover:rotate-12 transition-transform" />
+            <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-500 ease-in-out font-mono text-[10px] font-bold uppercase tracking-wider group-hover:ml-2 whitespace-nowrap">
+              Clinical AI
+            </span>
+          </button>
+        )}
+
+        {/* Persistent Floating Chat Bubble Pane */}
+        {isChatOpen && (
+          <div 
+            className="fixed bottom-6 right-6 z-50 w-96 max-w-[calc(100vw-32px)] h-[550px] bg-white border border-zinc-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300"
+            id="clinical-ai-bubble-pane"
+          >
+            {/* Header */}
+            <div className="p-4 border-b border-zinc-100 bg-zinc-900 text-white flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 bg-zinc-800 text-emerald-400 rounded-lg border border-zinc-700">
+                  <Sparkles className="h-4 w-4 animate-pulse" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-extrabold font-display tracking-tight text-white flex items-center gap-1.5">
+                    Clinical AI Partner
+                  </h4>
+                  <p className="text-[9px] text-emerald-400 font-mono flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-ping"></span>
+                    <span>Gemini 3.1 Active Stream</span>
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsChatOpen(false)}
+                className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                title="Minimize Chat"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Message stream */}
+            <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-zinc-50/30">
+              {aiChatMessages.map((msg, idx) => (
+                <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} space-y-1`}>
+                  <div className="flex items-center gap-1 text-[8px] font-mono font-bold uppercase tracking-wider text-zinc-400">
+                    {msg.role === 'user' ? 'You' : 'Clinical AI'}
+                  </div>
+                  <div className={`max-w-[85%] p-3 rounded-xl text-xs leading-relaxed ${
+                    msg.role === 'user' 
+                      ? 'bg-zinc-900 text-white rounded-tr-none' 
+                      : 'bg-white border border-zinc-200 text-zinc-800 rounded-tl-none shadow-xs'
+                  }`}>
+                    <p className="whitespace-pre-wrap">{msg.text}</p>
+                    
+                    {/* Tool thoughts in the mini chat */}
+                    {msg.thoughts && msg.thoughts.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-zinc-100 space-y-1">
+                        <span className="text-[8px] font-mono font-bold uppercase tracking-widest text-emerald-600 block">
+                          Executed Handshakes:
+                        </span>
+                        {msg.thoughts.map((th, tIdx) => (
+                          <div key={tIdx} className="bg-zinc-50 border border-zinc-150 rounded-sm p-1.5 text-[8px] font-mono text-zinc-500 leading-tight">
+                            • {th.action}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {aiLoading && (
+                <div className="flex items-center space-x-2 text-zinc-500 text-[10px] font-mono">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-500" />
+                  <span>Executing diagnostic handshakes...</span>
+                </div>
+              )}
+              <div ref={bubbleMessagesEndRef} />
+            </div>
+
+            {/* Input form */}
+            <form onSubmit={handleSendBubbleMessage} className="p-3 border-t border-zinc-100 bg-white flex gap-2">
+              <input
+                type="text"
+                placeholder="Ask clinical questions..."
+                value={bubbleInput}
+                onChange={(e) => setBubbleInput(e.target.value)}
+                disabled={aiLoading}
+                className="flex-1 px-3 py-2 border border-zinc-200 rounded-lg text-xs focus:outline-hidden focus:border-zinc-400 bg-white"
+                required
+              />
+              <button
+                type="submit"
+                disabled={aiLoading || !bubbleInput.trim()}
+                className="p-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg flex items-center justify-center transition-all cursor-pointer disabled:opacity-50"
+              >
+                <Send className="h-3.5 w-3.5" />
+              </button>
+            </form>
           </div>
         )}
 
