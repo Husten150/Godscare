@@ -1,0 +1,6 @@
+{
+  "name": "GodsCareHospital",
+  "description": "Secure patient portal powered by an autonomous clinical AI agent, personalized care pathways, encrypted record vaults, and premium billing checkout.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
