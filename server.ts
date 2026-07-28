@@ -1696,53 +1696,54 @@ async function generateClinicalFallback(messages: any[], uid: string) {
 
     const matchedDoctors = INITIAL_DOCTORS.filter(d => d.specialty.toLowerCase() === specialty.toLowerCase() || d.department.toLowerCase() === department.toLowerCase());
 
-    // 5. Structure the highly clinical output
+    // 5. Structure the human, deeply caring clinical output
     const welcomeStr = isRedFlag
-      ? `### 🚨 CRITICAL EMERGENCY CLINICAL ALERT`
-      : `### 🩺 GodsCare Clinical AI Specialist Assessment`;
+      ? `### 🚨 Urgent Medical Advisory`
+      : `### 🩺 A Message From Your GodsCare Doctor`;
 
     let markdownResponse = `${welcomeStr}
   
-Hello, **${patientName}**. I have processed your clinical presentation and completed a structured diagnostic evaluation.
+Hello **${patientName}**, I am your attending physician at GodsCare. I am here to support you, listen carefully to what you are feeling, and help you navigate your health safely.
 
-#### 1. Clinical Impression & Differentials
-Based on your described symptoms ("*${lastMessageText}*"), my clinical reasoning points to the following diagnostic differentials:
-- **Primary Consideration**: ${differentials}
-- **Secondary consideration**: Acute physiological stress, localized somatic inflammatory response, or transient viral etiology.
+I have carefully reviewed what you shared with me ("*${lastMessageText}*"). Here is what I believe is happening and how we can take good care of you together step by step.
 
-*Pathophysiology:* The underlying symptoms are likely mediated by localized inflammatory pathways or transient neural/vascular hyper-reactivity, requiring supportive care and targeted lifestyle interventions.
+#### 💬 Understanding What You're Experiencing
+Based on your symptoms and clinical presentation:
+- **Primary Medical Consideration**: ${differentials}
+- **What this means for you**: Your symptoms reflect how your body is responding to temporary physical strain, localized irritation, or mild inflammation. It is very important that we pay close attention to your body and give it the rest, hydration, and support it needs.
 
-#### 2. Risk Stratification & Severity Triage
-- **Clinical Priority / Severity Classification**: **${severity.toUpperCase()} SEVERITY**
-${isRedFlag ? `- **RED FLAG WARNING**: Your symptoms are highly suggestive of an acute clinical event requiring **emergency life-support assessment**. Please do not wait. Call 911 or proceed to the nearest Emergency Department immediately.` : `- **Clinical Recommendation**: Regular monitoring of vital signs (heart rate, blood pressure, temperature) is strongly advised. If symptoms worsen, change in quality, or fail to resolve within 48-72 hours, seek a face-to-face physician consultation.`}
+#### 🛡️ Priority & Safety Assessment
+- **Care Priority Level**: **${severity.toUpperCase()} PRIORITY**
+${isRedFlag ? `- **URGENT EMERGENCY ALERT**: Because your symptoms could indicate a serious or time-sensitive health event, **please do not wait**. Call emergency medical services (like 911 or your local ambulance) or have someone take you to the nearest Emergency Room right away. Please sit comfortably, stay as calm as possible, and let emergency doctors take care of you.` : `- **Doctor's Recommendation**: You can safely begin supportive home care today. Please monitor how you feel over the next 24-48 hours. If your symptoms get noticeably worse, change in nature, or do not improve after 3 days, please schedule an in-person consultation with one of our doctors.`}
 
-#### 3. Recommended Step-by-Step Care Pathway
-To manage these symptoms effectively, please execute the following clinical steps:
+#### 📋 Step-by-Step Caring Treatment Plan
+To help you rest and recover smoothly, here are the steps I recommend you take right now:
 ${careSteps.map((step, idx) => `${idx + 1}. **${step.split(':')[0]}**: ${step.split(':').slice(1).join(':') || ""}`).join("\n")}
 
-#### 4. Therapeutic Drug Classes & Self-Care Advisory
-For symptom alleviation, you may consider:
-- **General Classes**: ${suggestedMedClasses}
-- **Available Clinic Pharmacy Inventory**: 
+#### 💊 Safe Symptom Relief & Pharmacy Options
+To help ease your discomfort:
+- **Recommended Medicine Types**: ${suggestedMedClasses}
+- **Available at Our GodsCare Pharmacy**: 
   ${matchedMeds.length > 0 
-    ? matchedMeds.map(m => `* **${m.name}** (${m.category.toUpperCase()} category) - ₦${m.price.toLocaleString()}. *${m.description}*`).join("\n  ")
-    : `* **Paracetamol BP 500mg** (₦1,000) - For general mild pain and fever management.\n  * **Cetirizine Hydrochloride 10mg** (₦1,200) - For allergic or respiratory irritation symptoms.`
+    ? matchedMeds.map(m => `* **${m.name}** (₦${m.price.toLocaleString()}) — *${m.description}*`).join("\n  ")
+    : `* **Paracetamol BP 500mg** (₦1,000) — To gently soothe body aches, headaches, or mild fever.\n  * **Cetirizine Hydrochloride 10mg** (₦1,200) — To relieve allergic irritation, sneezing, or nasal discomfort.`
   }
 
-*Advisory:* Always consult with a licensed, board-certified healthcare provider before commencing any new pharmaceutical treatment plan.
+*Note:* Please always speak with a pharmacist or your doctor before starting any new medication to confirm it is completely safe for you.
 
-#### 5. Departmental Referrals & Clinical Coordination
-- **Recommended Specialization**: **Department of ${department}** (Consultation specialty: *${specialty}*)
-- **Assigned Clinical Experts**:
-  ${matchedDoctors.length > 0
-    ? matchedDoctors.map(d => `* **${d.name}** (${d.specialty}, rated ${d.rating}★). Availability: *${d.availableDays.join(", ")}*`).join("\n  ")
-    : `* **Dr. Elizabeth Vance** (Cardiologist, rated 4.9★)\n  * **Dr. Marcus Thorne** (Pediatrician, rated 4.9★)`
-  }
+#### 👨‍⚕️ In-Person Specialist Care
+If you would like to see a doctor for a physical check-up, I recommend our **Department of ${department}**:
+${matchedDoctors.length > 0
+  ? matchedDoctors.map(d => `* **${d.name}** (${d.specialty}, rated ${d.rating}★) — Available: *${d.availableDays.join(", ")}*`).join("\n  ")
+  : `* **Dr. Elizabeth Vance** (Cardiologist)\n  * **Dr. Marcus Thorne** (Pediatrician)`
+}
 
-*Scheduling Advice:* You can easily schedule an appointment with these physicians directly through our online appointment desk on your main dashboard portal.
+You can easily schedule a consultation with any of our caring physicians directly on your main dashboard portal.
+
+Please take good care of yourself today, get plenty of rest, and feel free to reach out to me again whenever you need guidance!
 
 ---
-*Disclaimer: This structured clinical AI assessment is generated autonomously for advanced triage and educational guidance. It does not constitute a formal binding medical prescription or final diagnosis. If you are experiencing a medical emergency, please seek professional care immediately.*`;
+*Medical Note: This AI consultation is provided to offer warm, informative clinical guidance and triage. It is not a substitute for an in-person physical examination by a licensed physician.*`;
 
     // 6. Autonomously log this into Firestore in the background so it's fully tracked
     try {
@@ -1860,26 +1861,19 @@ Respond with EXACTLY one word: "MEDICAL_TRIAGE" or "GENERAL_CONVERSATIONAL". Do 
     let tools: any[] | undefined = undefined;
 
     if (isMedicalEvent) {
-      // Set the clinical specialist prompt, but REMOVE forced fixed formatting templates
-      systemInstruction = `You are the "GodsCare Machine Learning Clinical AI Triage and Consultation Specialist", a board-certified Clinical AI Physician and Medical Specialist designed for professional medical triage, comprehensive history taking, clinical diagnostic risk-stratification, and structured patient care plan guidance.
+      // Set the caring clinical physician prompt
+      systemInstruction = `You are an attending physician at GodsCare Medical Center caring directly for a patient.
+Your goal is to provide warm, empathetic, deeply human, and clinically proficient care with excellent bedside manner.
 
-Your demeanor is that of an elite, senior consulting physician: exceptionally clinical, precise, deeply analytical, deeply empathetic yet strictly objective, calm, and highly professional. Your tone is serious, authoritative, and scientific, maintaining impeccable medical professionalism (bedside manner) with zero casual phrases, zero hype, and no colloquial expressions.
+When communicating with your patient:
+1. Warm & Human Bedside Manner: Address your patient warmly and respectfully. Listen attentively to their concerns. Express genuine compassion for their discomfort, pain, or anxiety (e.g. "I understand how uncomfortable or concerning this can feel", "I am here to support you and help you feel better").
+2. Clear, Human Medical Guidance: Explain potential causes, pathophysiology, and medical reasoning in clear, comforting language that any patient can easily understand. Avoid cold, mechanical, or overly robotic medical jargon.
+3. Safety Audit & Emergency Triage:
+   - Perform an immediate safety audit on every message. If the patient presents with severe, life-threatening, or red-flag signs (such as acute chest pain, severe shortness of breath, sudden unilateral weakness/stroke symptoms, facial drooping, severe anaphylaxis, or worst headache of their life), instruct them urgently, calmly, and reassuringly to seek immediate emergency medical care (call 911/emergency services or proceed to the nearest Emergency Department).
+4. Caring Action Steps: Provide a practical, comforting step-by-step care plan (rest, hydration, self-care, safe over-the-counter options, and specialist referrals) to empower them in their recovery.
+5. Caring Next Steps: Recommend relevant clinic departments or physicians at GodsCare when appropriate, and kindly remind them to schedule an in-person appointment for a complete physical examination.
 
-CLINICAL TRIAGE & HISTORY-TAKING PROTOCOLS:
-1. Systematic Intake Assessment: Treat the patient's initial input as a clinical presentation. Conduct a structured clinical history interview using the OPQRST-AS (Onset, Provocation/Palliation, Quality, Radiation, Severity 1-10, Temporal factors, Associated Symptoms) clinical framework to characterize their symptoms thoroughly.
-2. Clinical History Review: Check and review the patient's past medical history, active medications, and documented allergies. Always cross-reference this information to customize your clinical suggestions and guarantee pharmacological safety.
-3. Red Flag Detection & Emergency Triage:
-   - Perform an immediate safety audit on every message. If the patient presents life-threatening or urgent cardiorespiratory, neurological, or systemic signs (e.g., acute crushing chest pain, dyspnea/shortness of breath, focal deficits like unilateral weakness, slurred speech, facial drooping, severe anaphylaxis, or worst headache of their life), immediately trigger the Emergency Triage protocol.
-   - For Emergency Triage: Issue a prominent, serious, and supportive alert instructing them to call emergency services (e.g., 911 or localized ambulance) or proceed to the nearest Emergency Department immediately. Provide physiological reasons clearly and calmly to keep the patient safe and informed.
-
-FORMATTING AND OUTPUT STYLE:
-Organize your professional medical response clearly and beautifully using standard markdown headers, lists, and tables (as appropriate) for maximum legibility. Deliver clinical impressions, diagnostic differentials, risk levels (Emergent, Urgent, or Routine), actionable care steps, safe general therapeutic drug classes, and department recommendations naturally, professionally, and in a deeply clinical, diagnostic-focused manner without being constrained by rigid header templates.
-
-AUTONOMOUS AGENT INTEGRATION & CLINICAL REASONING:
-- You have autonomous access to the patient database. You MUST call 'getUserProfileData' to inspect active profiles, allergy parameters, and medical records whenever a patient raises historical clinical questions or begins a formal consultation.
-- You MUST call 'logNewUserInsight' to update the electronic health records with structured insights, custom care plans, and severity ratings to ensure continuity of care.
-- Never show raw tool names, JSON structures, or developer-focused logic in your patient-facing response. Present your findings as direct clinical conclusions from a seasoned physician.
-- Remind the patient that while your clinical AI analysis is highly advanced, it is an expert triage and educational guidance tool, and they must always consult a licensed human doctor for formal diagnosis and treatment plans.`;
+Keep your tone warm, deeply empathetic, attentive, professional, and genuinely human — exactly like a kind doctor sitting across from a patient in a comfortable consultation room.`;
 
       tools = [getUserProfileDataTool, logNewUserInsightTool];
     } else {
@@ -1940,8 +1934,7 @@ Do NOT output clinical diagnosis reports, clinical structured metrics, different
           { role: "user", parts: [{ text: feedbackPrompt }] }
         ],
         config: {
-          systemInstruction: `You are the GodsCare Machine Learning Clinical AI Triage and Consultation Specialist. Formulate your final, highly proficient medical assessment, severity categorization, and step-by-step care plan based on the real tool results and patient's clinical presentation.
-Ensure your response is deeply structured, professional, reassuring, and clinically detailed. Formulate a cohesive, structured clinical triage report following your core physician instructions and address the patient's concerns directly. Always advise formal clinical doctor consultation to finalize treatment.`
+          systemInstruction: `You are an attending physician at GodsCare Medical Center formulating a warm, human, deeply caring, and reassuring consultation response for your patient based on their clinical presentation and retrieved medical context. Express genuine care, explain your assessment in comforting terms, provide actionable step-by-step guidance, and gently advise them to schedule an in-person visit with one of our doctors.`
         }
       });
 

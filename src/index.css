@@ -24,6 +24,26 @@ html.dark, html.dark body {
   color: #f4f4f5;
 }
 
+/* High visibility for input, textarea, and select in Dark Mode */
+html.dark input,
+html.dark textarea,
+html.dark select {
+  background-color: #18181b;
+  color: #f4f4f5;
+  border-color: #3f3f46;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #a1a1aa;
+  opacity: 1;
+}
+
+html.dark select option {
+  background-color: #18181b;
+  color: #f4f4f5;
+}
+
 h1, h2, h3, .font-display {
   font-family: var(--font-display);
 }
