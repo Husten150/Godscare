@@ -762,7 +762,7 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
   };
 
   return (
-    <div className="py-12 bg-[#fbfbfc] font-sans min-h-[85vh] text-zinc-800">
+    <div className={`py-12 font-sans min-h-[85vh] transition-colors duration-300 ${isDark ? "bg-[#09090b] text-zinc-100" : "bg-[#fbfbfc] text-zinc-800"}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
         
         {/* Welcome Banner */}
@@ -857,13 +857,13 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
             {activeTab === "appointments" && (
               <>
                 {/* Left side: Booking scheduler */}
-                <div className="lg:col-span-5 bg-white border border-zinc-200 rounded-xl p-6 md:p-8 space-y-6">
-                  <div className="space-y-1 pb-4 border-b border-zinc-100">
-                    <h3 className="text-base font-bold text-zinc-950 flex items-center gap-2 font-display">
-                      <Stethoscope className="h-4.5 w-4.5 text-zinc-800" />
+                <div className="lg:col-span-5 bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 md:p-8 space-y-6">
+                  <div className="space-y-1 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+                    <h3 className="text-base font-bold text-zinc-950 dark:text-zinc-50 flex items-center gap-2 font-display">
+                      <Stethoscope className="h-4.5 w-4.5 text-zinc-800 dark:text-zinc-200" />
                       <span>Schedule Consultation</span>
                     </h3>
-                    <p className="text-xs text-zinc-500 font-sans">Pick department, clinician, and desired timing</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans">Pick department, clinician, and desired timing</p>
                   </div>
 
                   {bookError && (
@@ -997,11 +997,11 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
                 </div>
 
                 {/* Right side: Active booked list */}
-                <div className="lg:col-span-7 bg-white border border-zinc-200 rounded-xl p-6 md:p-8 space-y-6">
-                  <div className="pb-4 border-b border-zinc-100 flex justify-between items-center">
+                <div className="lg:col-span-7 bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 md:p-8 space-y-6">
+                  <div className="pb-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
                     <div>
-                      <h3 className="text-base font-bold text-zinc-950 font-display">Active Roster & History</h3>
-                      <p className="text-xs text-zinc-500 font-sans">Appointments registered under your account</p>
+                      <h3 className="text-base font-bold text-zinc-950 dark:text-zinc-50 font-display">Active Roster & History</h3>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans">Appointments registered under your account</p>
                     </div>
                     <span className="text-[10px] font-mono font-bold bg-zinc-100 text-zinc-600 border border-zinc-200 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                       {appointments.length} Visits

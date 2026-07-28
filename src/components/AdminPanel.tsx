@@ -965,7 +965,7 @@ export default function AdminPanel({ themeMode = "light" }: AdminPanelProps = {}
   });
 
   return (
-    <div className="py-12 bg-[#fbfbfc] font-sans min-h-[90vh] text-zinc-800">
+    <div className={`py-12 font-sans min-h-[90vh] transition-colors duration-300 ${isDark ? "bg-[#09090b] text-zinc-100" : "bg-[#fbfbfc] text-zinc-800"}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
         
         {/* Title line */}
