@@ -41,7 +41,12 @@ import {
   Camera
 } from "lucide-react";
 
-export default function AdminPanel() {
+interface AdminPanelProps {
+  themeMode?: "light" | "dark";
+}
+
+export default function AdminPanel({ themeMode = "light" }: AdminPanelProps = {}) {
+  const isDark = themeMode === "dark";
   const [activeSubTab, setActiveSubTab] = React.useState<"appointments" | "doctors" | "patients" | "billing_fees" | "feedbacks">("appointments");
   const [doctors, setDoctors] = React.useState<Doctor[]>([]);
   const [appointments, setAppointments] = React.useState<Appointment[]>([]);

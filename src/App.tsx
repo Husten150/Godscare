@@ -376,7 +376,7 @@ export default function App() {
             )}
             
             {currentView === "departments" && (
-              <Departments onSelectDepartment={handleSelectDepartment} />
+              <Departments onSelectDepartment={handleSelectDepartment} themeMode={themeMode} />
             )}
             
             {currentView === "doctors" && (
@@ -384,11 +384,12 @@ export default function App() {
                 selectedDepartment={selectedDepartment} 
                 setSelectedDepartment={setSelectedDepartment}
                 onBookDoctor={handleBookDoctor} 
+                themeMode={themeMode}
               />
             )}
 
             {currentView === "auth" && (
-              <Auth onAuthSuccess={handleAuthSuccess} />
+              <Auth onAuthSuccess={handleAuthSuccess} themeMode={themeMode} />
             )}
 
             {currentView === "dashboard" && userProfile && userProfile.role === "patient" && (
@@ -396,18 +397,19 @@ export default function App() {
                 userProfile={userProfile} 
                 initialSelectedDoctor={bookingDoctor}
                 clearInitialDoctorSelection={() => setBookingDoctor(null)}
+                themeMode={themeMode}
               />
             )}
 
             {currentView === "admin" && userProfile && userProfile.role === "admin" && (
-              <AdminPanel />
+              <AdminPanel themeMode={themeMode} />
             )}
           </>
         )}
       </main>
 
       {/* Footer */}
-      <Footer setCurrentView={handleSetView} />
+      <Footer setCurrentView={handleSetView} themeMode={themeMode} />
     </div>
   );
 }

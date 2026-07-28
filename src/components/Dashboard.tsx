@@ -48,9 +48,11 @@ interface DashboardProps {
   userProfile: UserProfile;
   initialSelectedDoctor?: Doctor | null;
   clearInitialDoctorSelection?: () => void;
+  themeMode?: "light" | "dark";
 }
 
-export default function Dashboard({ userProfile, initialSelectedDoctor, clearInitialDoctorSelection }: DashboardProps) {
+export default function Dashboard({ userProfile, initialSelectedDoctor, clearInitialDoctorSelection, themeMode = "light" }: DashboardProps) {
+  const isDark = themeMode === "dark";
   const [activeTab, setActiveTab] = React.useState<"appointments" | "reports" | "medical_history" | "ai_consultation" | "billing_medicine">("appointments");
   
   // Billing and Medicines states

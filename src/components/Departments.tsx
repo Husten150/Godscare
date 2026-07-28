@@ -13,6 +13,7 @@ import {
 
 interface DepartmentsProps {
   onSelectDepartment: (deptName: string) => void;
+  themeMode?: "light" | "dark";
 }
 
 interface DepartmentData {
@@ -26,7 +27,8 @@ interface DepartmentData {
   color: string;
 }
 
-export default function Departments({ onSelectDepartment }: DepartmentsProps) {
+export default function Departments({ onSelectDepartment, themeMode = "light" }: DepartmentsProps) {
+  const isDark = themeMode === "dark";
   const [searchQuery, setSearchQuery] = React.useState("");
 
   const departmentsData: DepartmentData[] = [
@@ -99,15 +101,15 @@ export default function Departments({ onSelectDepartment }: DepartmentsProps) {
   );
 
   return (
-    <div className="py-12 bg-[#fbfbfc] font-sans text-zinc-800">
+    <div className={`py-12 font-sans transition-colors duration-300 ${isDark ? "bg-zinc-950 text-zinc-100" : "bg-[#fbfbfc] text-zinc-800"}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Page Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
           <div className="space-y-2">
-            <span className="text-zinc-400 font-mono font-bold text-[10px] uppercase tracking-widest block">Clinical Wings</span>
-            <h1 className="text-3xl md:text-4xl font-extrabold text-zinc-900 tracking-tight font-display">Medical Departments</h1>
-            <p className="text-zinc-500 max-w-xl text-xs md:text-sm">
+            <span className="text-emerald-500 font-mono font-bold text-[10px] uppercase tracking-widest block">Clinical Wings</span>
+            <h1 className={`text-3xl md:text-4xl font-extrabold tracking-tight font-display ${isDark ? "text-white" : "text-zinc-900"}`}>Medical Departments</h1>
+            <p className={`max-w-xl text-xs md:text-sm ${isDark ? "text-zinc-400" : "text-zinc-500"}`}>
               Explore our world-class medical departments, find specialized care treatments, and connect directly with expert physicians.
             </p>
           </div>
@@ -120,7 +122,11 @@ export default function Departments({ onSelectDepartment }: DepartmentsProps) {
               placeholder="Search by wing or symptom..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-white border border-zinc-200 rounded-lg text-xs focus:outline-hidden focus:border-zinc-400 transition-all placeholder:text-zinc-400"
+              className={`w-full pl-9 pr-4 py-2 border rounded-xl text-xs focus:outline-hidden transition-all placeholder:text-zinc-400 ${
+                isDark 
+                  ? "bg-zinc-900 border-zinc-800 text-white focus:border-emerald-500/50" 
+                  : "bg-white border-zinc-200 text-zinc-900 focus:border-zinc-400"
+              }`}
               id="dept-search-input"
             />
           </div>
@@ -132,25 +138,33 @@ export default function Departments({ onSelectDepartment }: DepartmentsProps) {
             {filteredDepts.map((dept) => (
               <div 
                 key={dept.id}
-                className={`border rounded-xl p-6 md:p-8 transition-all hover:shadow-xs flex flex-col justify-between ${dept.color}`}
+                className={`border rounded-2xl p-6 md:p-8 transition-all hover:shadow-md flex flex-col justify-between ${
+                  isDark 
+                    ? "bg-zinc-900/90 border-zinc-800/90 text-zinc-200" 
+                    : "bg-white border-zinc-200/85 text-zinc-800"
+                }`}
               >
                 <div>
                   {/* Top Header */}
                   <div className="flex items-start justify-between mb-4">
-                    <div className="p-2.5 bg-zinc-50 rounded-lg border border-zinc-100">
+                    <div className={`p-2.5 rounded-xl border ${isDark ? "bg-zinc-800/80 border-zinc-700 text-emerald-400" : "bg-zinc-50 border-zinc-100 text-zinc-800"}`}>
                       {dept.icon}
                     </div>
-                    <span className="text-[9px] font-mono font-semibold px-2.5 py-0.5 bg-zinc-100 text-zinc-600 rounded-full border border-zinc-200 uppercase tracking-wider">
+                    <span className={`text-[9px] font-mono font-semibold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${
+                      isDark 
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+                        : "bg-zinc-100 text-zinc-600 border-zinc-200"
+                    }`}>
                       Primary Wing
                     </span>
                   </div>
 
                   {/* Descriptions */}
-                  <h3 className="text-xl font-bold text-zinc-900 mb-1.5 font-display">{dept.name}</h3>
-                  <p className="text-zinc-800 text-xs md:text-sm font-semibold mb-3 leading-relaxed">
+                  <h3 className={`text-xl font-bold mb-1.5 font-display ${isDark ? "text-white" : "text-zinc-900"}`}>{dept.name}</h3>
+                  <p className={`text-xs md:text-sm font-semibold mb-3 leading-relaxed ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>
                     {dept.description}
                   </p>
-                  <p className="text-zinc-500 text-xs leading-relaxed mb-6">
+                  <p className={`text-xs leading-relaxed mb-6 ${isDark ? "text-zinc-400" : "text-zinc-500"}`}>
                     {dept.longDescription}
                   </p>
 
@@ -158,11 +172,11 @@ export default function Departments({ onSelectDepartment }: DepartmentsProps) {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
                     {/* Conditions Treated */}
                     <div className="space-y-2.5">
-                      <h4 className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Commonly Treated</h4>
-                      <ul className="space-y-1.5 text-zinc-600 text-xs">
+                      <h4 className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-500">Commonly Treated</h4>
+                      <ul className={`space-y-1.5 text-xs ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>
                         {dept.conditions.map((cond, idx) => (
                           <li key={idx} className="flex items-center space-x-2">
-                            <span className="h-1 w-1 bg-zinc-300 rounded-full shrink-0"></span>
+                            <span className="h-1 w-1 bg-emerald-500 rounded-full shrink-0"></span>
                             <span>{cond}</span>
                           </li>
                         ))}
@@ -171,11 +185,11 @@ export default function Departments({ onSelectDepartment }: DepartmentsProps) {
 
                     {/* Services Offered */}
                     <div className="space-y-2.5">
-                      <h4 className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Our Services</h4>
-                      <ul className="space-y-1.5 text-zinc-600 text-xs">
+                      <h4 className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-500">Our Services</h4>
+                      <ul className={`space-y-1.5 text-xs ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>
                         {dept.services.map((srv, idx) => (
                           <li key={idx} className="flex items-center space-x-2">
-                            <span className="h-1 w-1 bg-zinc-300 rounded-full shrink-0"></span>
+                            <span className="h-1 w-1 bg-emerald-500 rounded-full shrink-0"></span>
                             <span>{srv}</span>
                           </li>
                         ))}
@@ -185,24 +199,30 @@ export default function Departments({ onSelectDepartment }: DepartmentsProps) {
                 </div>
 
                 {/* Direct CTA */}
-                <div className="border-t border-zinc-100 pt-5 mt-auto">
+                <div className={`border-t pt-5 mt-auto ${isDark ? "border-zinc-800" : "border-zinc-100"}`}>
                   <button
                     onClick={() => onSelectDepartment(dept.name)}
-                    className="w-full sm:w-auto px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg text-xs font-semibold uppercase tracking-wider transition-all flex items-center justify-center space-x-2 cursor-pointer"
+                    className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+                      isDark 
+                        ? "bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold" 
+                        : "bg-zinc-900 hover:bg-zinc-800 text-white"
+                    }`}
                   >
                     <span>View Specialists & Schedule</span>
-                    <ArrowRight className="h-3.5 w-3.5 text-emerald-400" />
+                    <ArrowRight className={`h-3.5 w-3.5 ${isDark ? "text-zinc-950" : "text-emerald-400"}`} />
                   </button>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-12 bg-white rounded-xl border border-zinc-200/60 max-w-xl mx-auto space-y-4">
+          <div className={`text-center py-12 rounded-2xl border max-w-xl mx-auto space-y-4 ${
+            isDark ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200/60"
+          }`}>
             <p className="text-zinc-400 text-xs font-medium">No medical departments matched your search term.</p>
             <button
               onClick={() => setSearchQuery("")}
-              className="text-xs font-semibold text-zinc-900 hover:underline cursor-pointer"
+              className={`text-xs font-semibold hover:underline cursor-pointer ${isDark ? "text-emerald-400" : "text-zinc-900"}`}
             >
               Reset Filters
             </button>
