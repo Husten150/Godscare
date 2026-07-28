@@ -94,6 +94,7 @@ export default function App() {
       setSelectedDepartment("All Departments");
     }
     setCurrentView(view);
+    window.scrollTo({ top: 0, behavior: "smooth" });
 
     try {
       const url = new URL(window.location.href);
@@ -140,6 +141,7 @@ export default function App() {
         setSelectedDepartment("All Departments");
       }
       setCurrentView(targetView);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
     window.addEventListener("popstate", handlePopState);
