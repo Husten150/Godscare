@@ -65,12 +65,18 @@ export default function App() {
     };
   }, []);
 
-  // Sync html element dark class
+  // Sync html and body element dark class & background colors
   React.useEffect(() => {
     if (themeMode === "dark") {
       document.documentElement.classList.add("dark");
+      document.body.classList.add("dark");
+      document.body.style.backgroundColor = "#09090b";
+      document.body.style.color = "#f4f4f5";
     } else {
       document.documentElement.classList.remove("dark");
+      document.body.classList.remove("dark");
+      document.body.style.backgroundColor = "#fbfbfc";
+      document.body.style.color = "#1c1c1e";
     }
   }, [themeMode]);
 
