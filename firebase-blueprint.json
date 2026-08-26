@@ -1,0 +1,192 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "User profile representing a patient or admin",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["patient", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "name", "role", "createdAt"]
+    },
+    "doctor": {
+      "title": "Doctor",
+      "description": "Doctor profile representing a medical professional",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "specialty": { "type": "string" },
+        "department": { "type": "string" },
+        "experience": { "type": "string" },
+        "education": { "type": "string" },
+        "rating": { "type": "number" },
+        "availableDays": { "type": "array" },
+        "availableHours": { "type": "array" },
+        "image": { "type": "string" },
+        "bio": { "type": "string" }
+      },
+      "required": ["id", "name", "specialty", "department", "experience", "rating", "image"]
+    },
+    "appointment": {
+      "title": "Appointment",
+      "description": "An appointment booked by a patient with a doctor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "patientEmail": { "type": "string" },
+        "doctorId": { "type": "string" },
+        "doctorName": { "type": "string" },
+        "specialty": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "completed", "cancelled"] },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "patientId", "patientName", "patientEmail", "doctorId", "doctorName", "specialty", "date", "time", "status", "createdAt"]
+    },
+    "report": {
+      "title": "Report",
+      "description": "Medical report or document uploaded by/for a patient",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "uploadedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "patientId", "patientName", "title", "fileUrl", "uploadedAt"]
+    },
+    "careplan": {
+      "title": "CarePlan",
+      "description": "Structured AI-generated care plans and diagnostic logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "insight": { "type": "string" },
+        "carePlan": { "type": "array" },
+        "severity": { "type": "string", "enum": ["low", "medium", "high"] },
+        "generatedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "patientId", "insight", "carePlan", "severity", "generatedBy", "createdAt"]
+    },
+    "payment": {
+      "title": "Payment",
+      "description": "A payment transaction log for premium subscriptions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "amount": { "type": "number" },
+        "currency": { "type": "string" },
+        "status": { "type": "string" },
+        "reference": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "patientId", "amount", "currency", "status", "reference", "createdAt"]
+    },
+    "medicalhistory": {
+      "title": "MedicalHistory",
+      "description": "Patient's physical medical history, allergies, chronic conditions, and previous visits log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "bloodType": { "type": "string" },
+        "allergies": { "type": "array" },
+        "chronicConditions": { "type": "array" },
+        "height": { "type": "string" },
+        "weight": { "type": "string" },
+        "bloodPressure": { "type": "string" },
+        "heartRate": { "type": "string" },
+        "additionalNotes": { "type": "string" },
+        "pastVisits": { "type": "array" },
+        "lastUpdated": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "patientId", "pastVisits", "lastUpdated"]
+    },
+    "medicalbill": {
+      "title": "MedicalBill",
+      "description": "Medical bill registered under patient account",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "title": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["unpaid", "paid"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "paymentReference": { "type": "string" },
+        "paidAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "patientId", "title", "amount", "status", "createdAt"]
+    },
+    "medicinepurchase": {
+      "title": "MedicinePurchase",
+      "description": "Log of clinically-approved medicine purchased by the patient",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "medicineId": { "type": "string" },
+        "medicineName": { "type": "string" },
+        "price": { "type": "number" },
+        "status": { "type": "string" },
+        "purchasedAt": { "type": "string", "format": "date-time" },
+        "paymentReference": { "type": "string" }
+      },
+      "required": ["id", "patientId", "medicineId", "medicineName", "price", "status", "purchasedAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "user",
+      "description": "User profiles containing patient and admin roles"
+    },
+    "doctors/{doctorId}": {
+      "schema": "doctor",
+      "description": "List of medical specialists available at the hospital"
+    },
+    "appointments/{appointmentId}": {
+      "schema": "appointment",
+      "description": "Hospital appointments booked by users"
+    },
+    "reports/{reportId}": {
+      "schema": "report",
+      "description": "Patient medical reports and diagnostic uploads"
+    },
+    "care_plans/{planId}": {
+      "schema": "careplan",
+      "description": "Patient care plans and diagnostic logs generated by the AI agent"
+    },
+    "payments/{paymentId}": {
+      "schema": "payment",
+      "description": "Patient payment transactions for premium subscriptions"
+    },
+    "medical_histories/{patientId}": {
+      "schema": "medicalhistory",
+      "description": "Detailed physical medical records and past clinic visits of patients"
+    },
+    "medical_bills/{billId}": {
+      "schema": "medicalbill",
+      "description": "Medical bills registered under the patient's account"
+    },
+    "medicine_purchases/{purchaseId}": {
+      "schema": "medicinepurchase",
+      "description": "Purchase transaction records for prescribed or OTC medicines"
+    }
+  }
+}

@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Ensure smooth transitions and high quality rendering globally */
+html, body {
+  font-family: var(--font-sans);
+  background-color: #f8fafc;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+html.dark, html.dark body {
+  background-color: #09090b;
+  color: #f4f4f5;
+}
+
+/* High visibility for input, textarea, and select in Dark Mode */
+html.dark input,
+html.dark textarea,
+html.dark select {
+  background-color: #18181b;
+  color: #f4f4f5;
+  border-color: #3f3f46;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #71717a;
+  opacity: 1;
+}
+
+html.dark select option {
+  background-color: #18181b;
+  color: #f4f4f5;
+}
+
+/* Utility for hiding scrollbars on quick action chips */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+}
