@@ -60,6 +60,7 @@ export interface Appointment {
   createdAt: string;
   paymentStatus?: "unpaid" | "paid";
   paymentAmount?: number;
+  amountPaid?: number;
   paymentReference?: string;
 }
 

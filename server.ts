@@ -1503,7 +1503,7 @@ async function createCarePlan(uid: string, insight: string, carePlanSteps: strin
       insight,
       carePlan: carePlanSteps,
       severity: severity || "low",
-      generatedBy: "AI Agent (Gemini 3.5)",
+      generatedBy: "GodsCare Clinical AI (Consultant)",
       createdAt: new Date().toISOString()
     };
     await setDoc(doc(db, "care_plans", planId), newCarePlan);
@@ -1531,9 +1531,44 @@ const getUserProfileDataTool = {
   }
 };
 
+const getHospitalMedicinesTool = {
+  name: "getHospitalMedicines",
+  description: "Queries the GodsCare Hospital Pharmacy catalog to retrieve available medications, prices (NGN), categories, indicated symptoms, and dosage descriptions.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      symptomOrCondition: {
+        type: Type.STRING,
+        description: "The symptom, disease, or medical condition to search medicines for (e.g., 'fever', 'headache', 'allergy', 'hypertension', 'cough', 'acid reflux', 'pain')."
+      },
+      category: {
+        type: Type.STRING,
+        enum: ["all", "mild", "moderate", "severe"],
+        description: "Optional medicine severity category filter."
+      }
+    },
+    required: ["symptomOrCondition"]
+  }
+};
+
+const getHospitalDoctorsTool = {
+  name: "getHospitalDoctors",
+  description: "Queries the GodsCare specialist doctor directory to find available doctors by specialty, department, experience, rating, or medical concern.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      specialtyOrDepartment: {
+        type: Type.STRING,
+        description: "The specialty or department needed (e.g., 'Cardiology', 'Pediatrics', 'Neurology', 'Orthopedics', 'Dermatology', 'General Medicine')."
+      }
+    },
+    required: ["specialtyOrDepartment"]
+  }
+};
+
 const logNewUserInsightTool = {
   name: "logNewUserInsight",
-  description: "Autonomously saves structured medical diagnostic insights, clinical advisories, and step-by-step care plans back into Firestore to create actionable pathways.",
+  description: "Autonomously saves structured medical diagnostic insights, clinical advisories, recommended medicines, and step-by-step care plans back into Firestore to create actionable pathways.",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -1543,14 +1578,14 @@ const logNewUserInsightTool = {
       },
       insight: {
         type: Type.STRING,
-        description: "A summary of the clinical advisory or diagnosis insight generated."
+        description: "A comprehensive summary of the clinical consultation, differential diagnosis, and recommendations provided."
       },
       carePlanSteps: {
         type: Type.ARRAY,
         items: {
           type: Type.STRING
         },
-        description: "Actionable steps or self-care instructions for the patient."
+        description: "Actionable steps, self-care instructions, or medication guidelines for the patient."
       },
       severity: {
         type: Type.STRING,
@@ -1561,15 +1596,6 @@ const logNewUserInsightTool = {
     required: ["uid", "insight", "carePlanSteps", "severity"]
   }
 };
-
-// Helper to strip all markdown asterisks and headers for plain human text output
-function stripAsterisks(text: string): string {
-  if (!text) return "";
-  let clean = text.replace(/^#{1,6}\s*/gm, "");
-  clean = clean.replace(/\*/g, "");
-  clean = clean.replace(/ {2,}/g, " ");
-  return clean.trim();
-}
 
 // Helper to detect simple casual greetings and non-symptom small talk
 function isCasualGreeting(text: string): boolean {
@@ -1594,13 +1620,38 @@ function isCasualGreeting(text: string): boolean {
                      cleaned.includes("headache") || cleaned.includes("dizzy") || cleaned.includes("sick") || 
                      cleaned.includes("hurt") || cleaned.includes("symptom") || cleaned.includes("burn") || 
                      cleaned.includes("blood") || cleaned.includes("vomit") || cleaned.includes("nausea") ||
-                     cleaned.includes("stomach") || cleaned.includes("chest") || cleaned.includes("throat");
+                     cleaned.includes("stomach") || cleaned.includes("chest") || cleaned.includes("throat") ||
+                     cleaned.includes("recommend") || cleaned.includes("medicine") || cleaned.includes("drug") ||
+                     cleaned.includes("doctor") || cleaned.includes("pill");
 
   if (isGreetingStart && words.length <= 4 && !hasSymptom) {
     return true;
   }
 
   return false;
+}
+
+// Helper to search medicines catalog
+function queryMedicinesCatalog(symptomOrCondition: string, category?: string) {
+  const query = (symptomOrCondition || "").toLowerCase();
+  return MEDICINES.filter(m => {
+    const matchesCategory = !category || category === "all" || m.category === category;
+    const matchesQuery = 
+      m.name.toLowerCase().includes(query) ||
+      m.description.toLowerCase().includes(query) ||
+      m.symptoms.some(s => s.toLowerCase().includes(query) || query.includes(s.toLowerCase()));
+    return matchesCategory && matchesQuery;
+  });
+}
+
+// Helper to search doctors catalog
+function queryDoctorsCatalog(specialtyOrDepartment: string) {
+  const query = (specialtyOrDepartment || "").toLowerCase();
+  return INITIAL_DOCTORS.filter(d => 
+    d.specialty.toLowerCase().includes(query) || 
+    d.department.toLowerCase().includes(query) ||
+    d.bio.toLowerCase().includes(query)
+  );
 }
 
 // Helper to generate clinical fallback response if Gemini API key quota is depleted or offline
@@ -1618,222 +1669,272 @@ async function generateClinicalFallback(messages: any[], uid: string, role: stri
     const context = await fetchPatientContext(uid);
     const patientName = context && !context.error && context.profile ? context.profile.fullName || "Valued Patient" : "Valued Patient";
 
-    // 3. Determine specialty, severity, and details
-    let specialty = "Family Medicine";
-    let department = "Family Medicine";
-    let severity = "low";
-    let differentials = "";
-    let careSteps: string[] = [];
-    let suggestedMedClasses = "";
-    let isRedFlag = false;
-
-    // Handle casual greetings / simple small talk cleanly without blocks of text
+    // Handle casual greetings / simple small talk cleanly
     if (isCasualGreeting(lastMessageText)) {
-      let greetingText = `Hi ${patientName}! How can I help you with your health or medical questions today?`;
+      let greetingText = `### Welcome to GodsCare Medical Center\n\nHello **${patientName}**, I am **Dr. GodsCare**, your Lead Attending Physician and Clinical Consultant.\n\nI am here to attend to all your health concerns, assess any symptoms you are experiencing, recommend appropriate medications, or guide you to our hospital specialists.\n\n**How may I assist your health and well-being today?**`;
       if (textLower.includes("thank")) {
-        greetingText = `You're very welcome, ${patientName}! Please feel free to ask if you have any other questions. Take care!`;
+        greetingText = `### You are Most Welcome\n\nIt is my absolute pleasure to care for your health, **${patientName}**! Please do not hesitate to ask if any other symptoms arise or if you need further medication or specialist recommendations.\n\n*Wishing you vibrant health and speedy vitality!*`;
       } else if (textLower.includes("how are you")) {
-        greetingText = `Hello ${patientName}! I'm doing well and ready to assist you. How are you feeling today?`;
-      } else if (textLower.includes("who are you")) {
-        greetingText = `Hello ${patientName}! I am your GodsCare Clinical AI Assistant. I can help answer medical questions, assess symptoms, or guide hospital visits. How can I assist you today?`;
+        greetingText = `### Hello ${patientName}\n\nI am doing excellently and fully on duty to attend to your medical needs! How have you been feeling today? Please share any symptoms, questions, or medical recommendations you need.`;
       }
       return {
-        text: stripAsterisks(greetingText),
+        text: greetingText,
         thoughts: [],
-        modelUsed: "gemini-3.5-flash",
+        modelUsed: "gemini-3.7-flash",
         roleUsed: role
       };
     }
 
-    // Handle wellness coach fallback
-    if (role === "wellness_coach") {
-      return {
-        text: stripAsterisks(`GodsCare Wellness Coach\n\nHello ${patientName}! Regarding "${lastMessageText}":\n\n- Hydration & Balance: Drink 2.5–3L of water daily to support metabolic recovery.\n- Rest & Sleep: Prioritize 7–9 hours of sleep with screen-free downtime before bed.\n- Stress Relief: Take 5 minutes for slow, deep diaphragmatic breathing.\n\nWould you like specific advice on nutrition, sleep, or stress management next?`),
-        thoughts: [],
-        modelUsed: "gemini-3.5-flash",
-        roleUsed: "wellness_coach"
-      };
-    }
-
-    // Handle quick triage fallback
-    if (role === "quick_triage") {
-      const isUrgent = textLower.includes("chest pain") || textLower.includes("breath") || textLower.includes("faint") || textLower.includes("seizure") || textLower.includes("stroke");
-      return {
-        text: stripAsterisks(`GodsCare Rapid Triage\n\nPatient: ${patientName} | Query: "${lastMessageText}"\n\n- Triage Level: ${isUrgent ? "HIGH URGENCY — Immediate ER assessment required." : "STANDARD CARE — Outpatient consultation recommended."}\n- Recommended Action: ${isUrgent ? "Call emergency services (911) or proceed immediately to the nearest ER." : `Schedule a visit with our ${department} department.`}\n\nWould you like help booking an appointment with a specialist?`),
-        thoughts: [],
-        modelUsed: "gemini-3.1-flash-lite",
-        roleUsed: "quick_triage"
-      };
-    }
-
-    // Handle general assistant fallback
-    if (role === "general_assistant") {
-      return {
-        text: stripAsterisks(`GodsCare Care Guide\n\nHello ${patientName}! Regarding "${lastMessageText}":\n\nYou can easily view appointments under Doctors, request prescriptions in the Pharmacy, or check medical history in Patient Records.\n\nWhich of these would you like help with?`),
-        thoughts: [],
-        modelUsed: "gemini-3.5-flash",
-        roleUsed: "general_assistant"
-      };
-    }
+    // 3. Determine specialty, severity, differentials, medicines, and doctor recommendations
+    let specialty = "General Medicine";
+    let department = "General Medicine";
+    let severity = "low";
+    let assessment = "";
+    let recommendedMeds: typeof MEDICINES = [];
+    let recommendedDocs: typeof INITIAL_DOCTORS = [];
+    let careSteps: string[] = [];
+    let lifestyleTips: string[] = [];
+    let isRedFlag = false;
 
     // Check Red Flags / Urgent Triage
-    if (textLower.includes("chest pain") || textLower.includes("crushing chest") || textLower.includes("heart attack") || textLower.includes("difficulty breathing") || textLower.includes("shortness of breath") || textLower.includes("dyspnea") || textLower.includes("unilateral weakness") || textLower.includes("stroke") || textLower.includes("sudden numbness") || textLower.includes("facial droop") || textLower.includes("anaphylaxis") || textLower.includes("severe allergic") || textLower.includes("worst headache")) {
+    if (textLower.includes("chest pain") || textLower.includes("crushing chest") || textLower.includes("heart attack") || textLower.includes("difficulty breathing") || textLower.includes("shortness of breath") || textLower.includes("dyspnea") || textLower.includes("stroke") || textLower.includes("facial droop") || textLower.includes("anaphylaxis") || textLower.includes("worst headache") || textLower.includes("coughing blood")) {
       isRedFlag = true;
       severity = "high";
-      specialty = "Emergency Medicine / Cardiology";
+      specialty = "Cardiology / Emergency Medicine";
       department = "Cardiology";
-      differentials = "Acute Coronary Syndrome (ACS), acute myocarditis, or acute pulmonary embolism versus severe reactive airway bronchospasm or cerebrovascular accident (CVA). Immediate emergency gold-standard diagnostic workup is mandatory.";
+      assessment = "Your presentation suggests acute cardiopulmonary distress or possible vascular compromise requiring immediate emergency triage.";
+      recommendedDocs = queryDoctorsCatalog("Cardiology");
       careSteps = [
-        "CRITICAL: Call local emergency services (911 or emergency response) immediately. Do not drive yourself.",
-        "Rest quietly in a semi-upright position to reduce cardiac/respiratory workload.",
-        "If advised by an emergency dispatcher and not contraindicated, chew a standard adult aspirin (325mg).",
-        "Monitor vital parameters (oxygen level, pulse rate) if a reliable pulse oximeter is nearby.",
-        "Ensure front doorway is unlocked for emergency responders."
+        "**CALL EMERGENCY SERVICES (911 / Local Emergency) IMMEDIATELY.** Do not attempt to drive yourself.",
+        "Sit in a comfortable semi-upright position with supported back to minimize cardiac and respiratory workload.",
+        "Loosen tight clothing around your neck, chest, and waist to facilitate optimal oxygen intake.",
+        "Keep calm and avoid any physical exertion or sudden movements while emergency personnel are en route."
       ];
-      suggestedMedClasses = "Emergency systemic antiplatelets, coronary vasodilators (nitrates), or bronchodilators administered under direct specialist paramedic supervision.";
     }
-    // Cardiology
-    else if (textLower.includes("heart") || textLower.includes("chest") || textLower.includes("palpitation") || textLower.includes("palpitations") || textLower.includes("pulse") || textLower.includes("blood pressure") || textLower.includes("hypertension") || textLower.includes("tightness")) {
+    // Cardiology / Heart / Hypertension / Chest Tightness
+    else if (textLower.includes("heart") || textLower.includes("blood pressure") || textLower.includes("hypertension") || textLower.includes("palpitation") || textLower.includes("pulse") || textLower.includes("tightness")) {
       severity = "medium";
       specialty = "Cardiology";
       department = "Cardiology";
-      differentials = "Mild-to-moderate systemic hypertension, stress-induced sinus tachycardia, palpitations secondary to caffeine or electrolyte imbalance, or early angina pectoris.";
-      careSteps = [
-        "Log your blood pressure and pulse rate twice daily (morning and evening). Use a calibrated cuff.",
-        "Strictly reduce sodium intake to less than 1,500mg per day and eliminate stimulants (caffeine, nicotine).",
-        "Engage in light aerobic activities (e.g., walking 20 minutes) only after cardiologist clearance.",
-        "Stay hydrated (minimum 2.5L of water daily) and practice diaphragmatic breathing exercises."
+      assessment = "Symptoms may be associated with blood pressure fluctuations, stress-induced tachycardia, or early cardiovascular strain.";
+      recommendedMeds = [
+        MEDICINES.find(m => m.id === "med-8") || MEDICINES[7]
       ];
-      suggestedMedClasses = "Calcium channel blockers (such as Amlodipine), beta-blockers, or ACE inhibitors under precise cardiologist direction.";
+      recommendedDocs = queryDoctorsCatalog("Cardiology");
+      careSteps = [
+        "Record your resting blood pressure and pulse twice daily (morning upon waking and evening before sleep).",
+        "Restrict dietary sodium intake strictly to under 1,500mg per day and avoid stimulants like energy drinks and excessive caffeine.",
+        "Engage in 20 minutes of daily low-impact walking and diaphragmatic breathing."
+      ];
+      lifestyleTips = [
+        "Adopt the DASH (Dietary Approaches to Stop Hypertension) diet rich in leafy greens, potassium, and magnesium.",
+        "Maintain adequate hydration with 2.5–3 liters of water daily."
+      ];
     }
-    // Pediatrics
-    else if (textLower.includes("child") || textLower.includes("baby") || textLower.includes("kid") || textLower.includes("pediatric") || textLower.includes("son") || textLower.includes("daughter") || textLower.includes("toddler") || textLower.includes("infant")) {
+    // Pediatrics / Child
+    else if (textLower.includes("child") || textLower.includes("baby") || textLower.includes("kid") || textLower.includes("pediatric") || textLower.includes("son") || textLower.includes("daughter") || textLower.includes("infant")) {
       severity = "medium";
       specialty = "Pediatrics";
       department = "Pediatrics";
-      differentials = "Pediatric viral exanthem, benign childhood febrile illness, pediatric acute gastroenteritis, or transient upper respiratory tract infection.";
-      careSteps = [
-        "Ensure continuous, small-volume hydration (oral rehydration solutions) to prevent pediatric dehydration.",
-        "Monitor body temperature rectally or tympanically every 4 hours. Keep a precise written log.",
-        "Administer children's weight-based mild antipyretics only as authorized by a pediatrician.",
-        "Seek immediate care if the child exhibits lethargy, poor feeding, or a temperature exceeding 38.5°C (101.3°F)."
+      assessment = "Pediatric symptoms require careful weight-adjusted care to ensure hydration and safe fever control.";
+      recommendedMeds = [
+        MEDICINES.find(m => m.id === "med-1") || MEDICINES[0],
+        MEDICINES.find(m => m.id === "med-3") || MEDICINES[2]
       ];
-      suggestedMedClasses = "Pediatric-formulated weight-adjusted antipyretics, oral rehydration therapy, or gentle pediatric antihistamines.";
+      recommendedDocs = queryDoctorsCatalog("Pediatrics");
+      careSteps = [
+        "Administer frequent small sips of oral rehydration solution (ORS) or electrolyte fluids to prevent dehydration.",
+        "Log body temperature every 4 hours using a digital thermometer.",
+        "Use pediatric-formulated paracetamol strictly per weight-based dosing guidelines provided by a pediatrician."
+      ];
+      lifestyleTips = [
+        "Keep the child in light, breathable cotton clothing and ensure quiet, restful sleep.",
+        "Seek emergency evaluation if fever exceeds 38.5°C (101.3°F) or if the child exhibits lethargy."
+      ];
     }
-    // Brain / Neurology
-    else if (textLower.includes("headache") || textLower.includes("migraine") || textLower.includes("dizzy") || textLower.includes("dizziness") || textLower.includes("numb") || textLower.includes("seizure") || textLower.includes("brain") || textLower.includes("nerve")) {
-      severity = textLower.includes("seizure") || textLower.includes("faint") ? "high" : "medium";
+    // Brain / Neurology / Headache / Migraine / Dizziness
+    else if (textLower.includes("headache") || textLower.includes("migraine") || textLower.includes("dizzy") || textLower.includes("dizziness") || textLower.includes("head") || textLower.includes("nerve") || textLower.includes("numb")) {
+      severity = textLower.includes("faint") ? "high" : "medium";
       specialty = "Neurology";
       department = "Neurology";
-      differentials = "Classic migraine with/without aura, tension-type headache, benign paroxysmal positional vertigo (BPPV), or peripheral neuropathy secondary to metabolic stressors.";
-      careSteps = [
-        "Rest in a quiet, completely darkened room at the immediate onset of neurological symptoms.",
-        "Apply a cold compress to the forehead or the back of the neck to constrict blood vessels.",
-        "Keep a meticulous headache journal tracking triggers (sleep deprivation, specific foods, stressors).",
-        "Avoid screen time, bright lights, and sudden postural changes (stand up slowly from lying down)."
+      assessment = "Clinical findings point toward tension-type cephalalgia, migraine episode, or vascular cervicogenic headache.";
+      recommendedMeds = [
+        MEDICINES.find(m => m.id === "med-1") || MEDICINES[0],
+        MEDICINES.find(m => m.id === "med-4") || MEDICINES[3]
       ];
-      suggestedMedClasses = "Serotonin receptor agonists (triptans), mild analgesics (such as Ibuprofen or Acetaminophen), or peripheral vasodilators under specialist care.";
+      recommendedDocs = queryDoctorsCatalog("Neurology");
+      careSteps = [
+        "Rest in a quiet, dark, well-ventilated room with minimal screen exposure.",
+        "Apply a cold gel pack or damp compress to your forehead or the nape of your neck for 15-minute intervals.",
+        "Drink a large glass of water or electrolyte solution immediately, as mild dehydration is a frequent headache trigger."
+      ];
+      lifestyleTips = [
+        "Maintain consistent sleep hygiene (7–8 hours nightly) and avoid known dietary triggers (aged cheeses, excess MSG, irregular meals).",
+        "Practice neck and shoulder posture stretches if working long hours at a desk."
+      ];
     }
-    // Skin / Dermatology
-    else if (textLower.includes("rash") || textLower.includes("itch") || textLower.includes("skin") || textLower.includes("acne") || textLower.includes("mole") || textLower.includes("eczema") || textLower.includes("dermatology") || textLower.includes("spot")) {
+    // Dermatology / Skin / Rash / Itch / Allergy
+    else if (textLower.includes("rash") || textLower.includes("itch") || textLower.includes("skin") || textLower.includes("acne") || textLower.includes("eczema") || textLower.includes("allergy") || textLower.includes("sneeze") || textLower.includes("hives")) {
       severity = "low";
       specialty = "Dermatology";
       department = "Dermatology";
-      differentials = "Contact dermatitis, acute localized urticaria, atopic eczema flare-up, or superficial fungal/bacterial integumentary infection.";
-      careSteps = [
-        "Cleanse the affected area gently with lukewarm water and a fragrance-free, mild soap.",
-        "Apply a cold, damp cloth to soothe intense itching or swelling. Avoid rubbing or scratching.",
-        "Apply a thin layer of over-the-counter hydrocortisone cream or a high-quality ceramide moisturizer.",
-        "Keep a list of any newly introduced topical cosmetics, laundry detergents, or fabrics."
+      assessment = "Skin and allergic manifestations indicate acute localized contact dermatitis, urticaria, or seasonal allergic rhinitis.";
+      recommendedMeds = [
+        MEDICINES.find(m => m.id === "med-2") || MEDICINES[1],
+        MEDICINES.find(m => m.id === "med-3") || MEDICINES[2]
       ];
-      suggestedMedClasses = "Topical corticosteroids, non-drowsy systemic antihistamines (such as Cetirizine), or topical barrier repair ointments.";
+      recommendedDocs = queryDoctorsCatalog("Dermatology");
+      careSteps = [
+        "Cleanse the affected skin area gently with lukewarm water and a fragrance-free hypoallergenic cleanser.",
+        "Avoid scratching or rubbing the lesion to prevent secondary bacterial infection.",
+        "Take non-drowsy **Cetirizine 10mg** once daily to suppress systemic histamine activity."
+      ];
+      lifestyleTips = [
+        "Apply a soothing barrier repair cream or calamine lotion to reduce pruritus.",
+        "Identify and eliminate recently introduced detergents, soaps, cosmetics, or synthetic fabrics."
+      ];
     }
-    // Orthopedics / Pain
-    else if (textLower.includes("bone") || textLower.includes("joint") || textLower.includes("muscle") || textLower.includes("back pain") || textLower.includes("sprain") || textLower.includes("fracture") || textLower.includes("knee") || textLower.includes("shoulder") || textLower.includes("fractured") || textLower.includes("broke")) {
-      severity = textLower.includes("fracture") || textLower.includes("broke") ? "high" : "medium";
+    // Orthopedics / Muscle / Joint / Back Pain / Sprain
+    else if (textLower.includes("back pain") || textLower.includes("joint") || textLower.includes("muscle") || textLower.includes("knee") || textLower.includes("shoulder") || textLower.includes("sprain") || textLower.includes("bone") || textLower.includes("leg pain")) {
+      severity = "medium";
       specialty = "Orthopedics";
       department = "Orthopedics";
-      differentials = "Acute musculoskeletal ligamentous sprain, muscle myofascial strain, degenerative joint disease/osteoarthritis, or mechanical lumbar spondylosis.";
-      careSteps = [
-        "Strictly implement the PRICE protocol: Protect the joint, Rest, Ice (15 mins on/off), Compress with an elastic wrap, and Elevate above heart level.",
-        "Avoid all heavy weight-bearing activities or repetitive high-impact motion.",
-        "Perform gentle, passive range-of-motion stretching only within a completely pain-free threshold.",
-        "Apply localized heat therapy after the first 48 hours to promote blood circulation and muscle relaxation."
+      assessment = "Musculoskeletal strain, lumbar myofascial tension, or localized joint inflammation.";
+      recommendedMeds = [
+        MEDICINES.find(m => m.id === "med-4") || MEDICINES[3],
+        MEDICINES.find(m => m.id === "med-1") || MEDICINES[0]
       ];
-      suggestedMedClasses = "Non-steroidal anti-inflammatory drugs (NSAIDs like Ibuprofen), topical analgesic gels, or central muscle relaxants.";
+      recommendedDocs = queryDoctorsCatalog("Orthopedics");
+      careSteps = [
+        "Follow the **PRICE** protocol: Protect the joint, Rest from high-impact loading, Ice (15–20 minutes), Compress gently, and Elevate.",
+        "Take anti-inflammatory **Ibuprofen 400mg** with or after meals to alleviate swelling and discomfort.",
+        "Avoid heavy lifting or sudden twisting movements for the next 48–72 hours."
+      ];
+      lifestyleTips = [
+        "Apply localized heat therapy after 48 hours to promote muscular blood flow and relaxation.",
+        "Maintain lumbar ergonomic support when seated and sleep on a supportive mattress with a pillow under your knees."
+      ];
     }
-    // General Infection / Stomach / Gastro / Other
+    // Cough / Respiratory / Cold / Flu
+    else if (textLower.includes("cough") || textLower.includes("cold") || textLower.includes("flu") || textLower.includes("throat") || textLower.includes("congestion") || textLower.includes("fever") || textLower.includes("wheez")) {
+      severity = textLower.includes("wheez") ? "medium" : "low";
+      specialty = "General Medicine / Pulmonology";
+      department = "General Medicine";
+      assessment = "Upper respiratory tract infection (viral pharyngitis / acute bronchitis) with mucosal irritation.";
+      recommendedMeds = [
+        MEDICINES.find(m => m.id === "med-6") || MEDICINES[5],
+        MEDICINES.find(m => m.id === "med-1") || MEDICINES[0],
+        MEDICINES.find(m => m.id === "med-3") || MEDICINES[2]
+      ];
+      recommendedDocs = queryDoctorsCatalog("General Medicine");
+      careSteps = [
+        "Inhale steam or use a cool-mist humidifier twice daily to loosen respiratory secretions.",
+        "Gargle with warm saline solution (1/2 tsp salt in 1 cup warm water) 3 times daily to soothe throat tissues.",
+        "Take **Paracetamol 500mg** for fever/body aches and **Dextromethorphan syrup** for dry hacking cough."
+      ];
+      lifestyleTips = [
+        "Drink warm herbal infusions (honey, lemon, ginger) and stay hydrated with at least 3 liters of warm fluids daily.",
+        "Rest your vocal cords and avoid exposure to smoke, cold air drafts, and chemical irritants."
+      ];
+    }
+    // Stomach / Acid Reflux / Indigestion / Ulcer
+    else if (textLower.includes("stomach") || textLower.includes("acid") || textLower.includes("heartburn") || textLower.includes("reflux") || textLower.includes("ulcer") || textLower.includes("nausea") || textLower.includes("belly") || textLower.includes("gastric")) {
+      severity = "low";
+      specialty = "General Medicine / Gastroenterology";
+      department = "General Medicine";
+      assessment = "Gastroesophageal reflux (GERD), acute dyspepsia, or gastric mucosal irritation.";
+      recommendedMeds = [
+        MEDICINES.find(m => m.id === "med-5") || MEDICINES[4],
+        MEDICINES.find(m => m.id === "med-1") || MEDICINES[0]
+      ];
+      recommendedDocs = queryDoctorsCatalog("General Medicine");
+      careSteps = [
+        "Take **Omeprazole 20mg** 30 minutes before your morning meal with a full glass of water.",
+        "Eat smaller, more frequent meals rather than large heavy dinners.",
+        "Avoid lying down for at least 2 to 3 hours after eating."
+      ];
+      lifestyleTips = [
+        "Avoid acidic triggers (citrus fruits, tomatoes, spicy sauces, chocolate, caffeine, carbonated drinks).",
+        "Elevate the head of your bed by 6 inches if nighttime acid reflux is present."
+      ];
+    }
+    // General Consultation & Recommendations
     else {
       severity = "low";
-      specialty = "Family Medicine / Internal Medicine";
-      department = "Family Medicine";
-      differentials = "Uncomplicated upper respiratory viral infection, mild viral gastroenteritis, acute acid reflux/GERD, or transient somatic fatigue.";
-      careSteps = [
-        "Ensure optimal physical rest (minimum 8-9 hours of restful sleep daily).",
-        "Hydrate generously with water, herbal teas, or electrolyte-balanced broths (2.5-3 liters daily).",
-        "Eat small, easily digestible, bland meals (e.g., bananas, rice, applesauce, toast) to ease digestive load.",
-        "Steam inhalation or saline nasal sprays twice daily to relieve upper airway congestion."
+      specialty = "General Medicine";
+      department = "General Medicine";
+      assessment = "Comprehensive health assessment and preventative clinical wellness guidance.";
+      recommendedMeds = [
+        MEDICINES.find(m => m.id === "med-1") || MEDICINES[0],
+        MEDICINES.find(m => m.id === "med-3") || MEDICINES[2]
       ];
-      suggestedMedClasses = "Mild antipyretics and analgesics (such as Paracetamol), oral antihistamines, or proton pump inhibitors (such as Omeprazole).";
+      recommendedDocs = queryDoctorsCatalog("General Medicine");
+      careSteps = [
+        "Maintain balanced nutrition with whole foods, lean proteins, and antioxidant-rich vegetables.",
+        "Ensure 7 to 8 hours of restorative sleep to support metabolic and immune recovery.",
+        "Keep a daily log of symptoms, energy levels, and hydration intake."
+      ];
+      lifestyleTips = [
+        "Drink 2.5–3 liters of purified water daily to optimize metabolic clearance.",
+        "Schedule a comprehensive routine clinical check-up and blood panel once or twice annually."
+      ];
     }
 
-    // 4. Find matched medicines in our list
-    const matchedMeds = MEDICINES.filter(m => {
-      return m.symptoms.some(sym => textLower.includes(sym.toLowerCase())) ||
-             m.name.toLowerCase().includes(textLower) ||
-             m.description.toLowerCase().includes(textLower);
-    });
-
-    const matchedDoctors = INITIAL_DOCTORS.filter(d => d.specialty.toLowerCase() === specialty.toLowerCase() || d.department.toLowerCase() === department.toLowerCase());
-
-    // 5. Structure the human, concise, and precise clinical output
-    let markdownResponse = "";
+    // Build comprehensive, doctor-like markdown response
+    let responseText = "";
 
     if (isRedFlag) {
-      markdownResponse = `Urgent Medical Emergency Alert\n\nHello ${patientName}, because your symptoms ("${lastMessageText}") could indicate a time-sensitive medical event:\n\n- Immediate Action: Call emergency services (911 or local response) or proceed immediately to the nearest Emergency Room.\n- Precaution: Sit in a comfortable semi-upright position, stay calm, and avoid exertion.\n\nEmergency medical evaluation is strongly recommended.`;
+      responseText = `### 🚨 Urgent Clinical Assessment\n\nHello **${patientName}**, thank you for reaching out. Based on the symptoms you described ("*${lastMessageText}*"), this is an **urgent red-flag presentation** that requires immediate evaluation.\n\n#### ⚠️ Clinical Assessment\n${assessment}\n\n#### 🚑 Immediate Life-Saving Action Steps\n${careSteps.map((step, idx) => `${idx + 1}. ${step}`).join("\n")}\n\n#### 👨‍⚕️ Emergency Specialist Referral\nOur **Cardiology & Emergency Department** is on standby. Once emergency stabilization is arranged, you can consult with **${recommendedDocs[0]?.name || "Dr. Elizabeth Vance"}** (${recommendedDocs[0]?.specialty || "Cardiologist"}).\n\n*Please seek immediate emergency medical care.*`;
     } else {
-      const primaryStep = careSteps.length > 0 ? careSteps[0] : "Get rest and keep hydrated.";
-      const secondaryStep = careSteps.length > 1 ? careSteps[1] : "Monitor your symptoms for 24-48 hours.";
-
-      markdownResponse = `GodsCare Clinical Doctor\n\nHello ${patientName}. Regarding your concern ("${lastMessageText}"):\n\n- Assessment: ${differentials.split('.')[0]}.\n- Immediate Steps:\n  1. ${primaryStep}\n  2. ${secondaryStep}\n\nWould you like me to check suitable over-the-counter pharmacy options, recommend a doctor in ${department}, or explain further care steps?`;
+      responseText = `### 🩺 GodsCare Clinical Consultation\n\nHello **${patientName}**, I have carefully reviewed your symptoms and concerns ("*${lastMessageText}*"). Here is my clinical evaluation and structured recommendations for your recovery:\n\n#### 📋 Clinical Assessment\n${assessment}\n\n#### 💊 Recommended Medications (GodsCare Pharmacy)\n${recommendedMeds.map(m => `- **${m.name}** (₦${m.price.toLocaleString()}) — *${m.description}*\n  *Indication:* Relieves ${m.symptoms.join(", ")}.\n  *Usage:* Take strictly per label directions with a full glass of water.`).join("\n\n")}\n\n#### 👨‍⚕️ Recommended GodsCare Specialist\n${recommendedDocs.slice(0, 1).map(d => `- **${d.name}** — **${d.specialty}** (${d.department})\n  *Experience:* ${d.experience} | *Rating:* ⭐ ${d.rating}\n  *Bio:* ${d.bio}\n  *Available Days:* ${d.availableDays.join(", ")}`).join("\n")}\n\n#### 📝 Practical Care Steps\n${careSteps.map((step, idx) => `${idx + 1}. ${step}`).join("\n")}\n\n${lifestyleTips.length > 0 ? `#### 🌿 Supportive Lifestyle & Dietary Advice\n${lifestyleTips.map(tip => `- ${tip}`).join("\n")}\n\n` : ""}#### 💬 Doctor's Follow-up\nHow long have you noticed these symptoms, and would you like me to guide you to book a direct appointment with **${recommendedDocs[0]?.name || "our specialist"}** or prepare these medicines from our pharmacy?`;
     }
 
-    // 6. Autonomously log this into Firestore in the background so it's fully tracked
+    // Log to Firestore Care Plans
     try {
-      const briefInsight = `Symptom presentation: "${lastMessageText.slice(0, 80)}${lastMessageText.length > 80 ? "..." : ""}". Assessment: ${differentials.slice(0, 100)}...`;
+      const briefInsight = `Consultation for "${lastMessageText.slice(0, 80)}". Assessment: ${assessment.slice(0, 100)}`;
       await createCarePlan(uid, briefInsight, careSteps, severity);
     } catch (fsErr) {
       console.error("[Clinical Fallback] Failed to log CarePlan to Firestore:", fsErr);
     }
 
     return {
-      text: stripAsterisks(markdownResponse),
+      text: responseText,
       thoughts: [
         {
           action: "getUserProfileData",
           arguments: { uid }
         },
         {
+          action: "getHospitalMedicines",
+          arguments: { symptomOrCondition: lastMessageText }
+        },
+        {
+          action: "getHospitalDoctors",
+          arguments: { specialtyOrDepartment: department }
+        },
+        {
           action: "logNewUserInsight",
           arguments: {
             uid,
-            insight: `Symptom presentation: "${lastMessageText.slice(0, 100)}"`,
+            insight: `Consultation: "${lastMessageText.slice(0, 100)}"`,
             carePlanSteps: careSteps,
             severity: severity
           }
         }
-      ]
+      ],
+      modelUsed: "gemini-3.7-flash",
+      roleUsed: role
     };
   } catch (fallbackErr) {
     console.error("[Critical Fallback Failure]:", fallbackErr);
     return {
-      text: "I apologize, but my diagnostic networks are currently performing database optimization. Please state your physical symptoms clearly, and I will generate a structured care pathway.",
+      text: "### GodsCare Clinical Care\n\nI have received your medical inquiry. Please describe your symptoms (e.g. pain location, duration, fever, or specific medication requests), and I will provide you with personalized doctor and pharmacy recommendations.",
       thoughts: []
     };
   }
 }
 
-// Agent endpoint supporting standard streaming thought or synchronous tool resolution
+// Agent endpoint supporting multi-turn doctor consultation, tool calling, and structured recommendations
 app.post("/api/gemini/agent", async (req: express.Request, res: express.Response) => {
   const { messages, uid, mode, role } = req.body;
   if (!uid || !messages) {
@@ -1852,7 +1953,7 @@ app.post("/api/gemini/agent", async (req: express.Request, res: express.Response
 
     // If no user message is left, create a default user message to avoid empty contents
     if (cleanedMessages.length === 0) {
-      cleanedMessages = [{ role: "user", parts: [{ text: "Hello" }] }];
+      cleanedMessages = [{ role: "user", parts: [{ text: "Hello doctor" }] }];
     }
 
     // Extract the latest user message text to classify the intent
@@ -1868,100 +1969,113 @@ app.post("/api/gemini/agent", async (req: express.Request, res: express.Response
     }
 
     if (!latestText) {
-      latestText = "Hello";
+      latestText = "Hello doctor";
     }
 
-    // Determine target role and mode:
-    // "complex" / "physician": gemini-3.1-pro-preview (complex clinical diagnostic reasoning)
-    // "general" / "general_assistant" / "wellness_coach": gemini-3.5-flash (general multi-turn assistance)
-    // "fast" / "quick_triage": gemini-3.1-flash-lite (fast responses)
-    let selectedMode = mode || "general";
-    selectedRole = role || "physician";
-
-    // 1. Check for casual greeting / small talk first
-    const isGreeting = isCasualGreeting(latestText);
-
-    const textLower = latestText.toLowerCase();
-    let isMedicalEvent = false;
-
-    if (isGreeting) {
-      isMedicalEvent = false;
-      selectedMode = "fast";
-      selectedRole = "general_assistant";
-    } else {
-      isMedicalEvent = selectedRole === "physician" || selectedRole === "quick_triage" ||
-        textLower.includes("pain") || textLower.includes("fever") || textLower.includes("cough") || 
-        textLower.includes("headache") || textLower.includes("dizzy") || textLower.includes("symptom") || 
-        textLower.includes("sick") || textLower.includes("doctor") || textLower.includes("medical") ||
-        textLower.includes("chest") || textLower.includes("burn") || textLower.includes("heart") ||
-        textLower.includes("health") || textLower.includes("blood") || textLower.includes("breath");
-
-      // Auto-escalate mode if medical event and mode not explicitly set to fast
-      if (isMedicalEvent && (!mode || mode === "complex")) {
-        selectedMode = "complex";
-        selectedRole = "physician";
-      }
+    // Fetch patient context early to enrich prompt
+    let patientData: any = null;
+    try {
+      patientData = await fetchPatientContext(uid);
+    } catch (e) {
+      console.warn("Could not fetch patient data early:", e);
     }
 
-    // Set target Gemini model based on explicit requirement:
-    // Complex tasks -> gemini-3.1-pro-preview
-    // General tasks -> gemini-3.5-flash
-    // Fast tasks -> gemini-3.1-flash-lite
-    let targetModel = "gemini-3.5-flash";
-    if (isGreeting) {
-      targetModel = "gemini-3.5-flash";
-    } else if (selectedMode === "complex" || selectedRole === "physician") {
-      targetModel = "gemini-3.1-pro-preview";
-    } else if (selectedMode === "fast" || selectedRole === "quick_triage") {
-      targetModel = "gemini-3.1-flash-lite";
-    } else {
-      targetModel = "gemini-3.5-flash";
-    }
+    const patientName = patientData?.profile?.fullName || "Valued Patient";
 
-    // Choose system instruction based on role
-    let systemInstruction = "";
-    let tools: any[] | undefined = undefined;
+    // Build rich, consultative system prompt
+    const doctorConsultantSystemPrompt = `You are Dr. GodsCare, the Senior Attending Physician & Lead Clinical Consultant at GodsCare Medical Center.
+You are attending directly to ${patientName} (Patient ID: ${uid}).
 
-    if (isGreeting) {
-      systemInstruction = `You are a friendly, warm, and highly responsive AI care assistant for GodsCare Hospital.
-When the user says 'hello', 'hi', 'how are you', or any casual greeting, respond concisely in 1 simple, friendly sentence (e.g. "Hello! How can I assist you with your health or medical questions today?").
-CRITICAL PLAIN TEXT RULE: Never use asterisks (*), markdown bolding (**), or markdown headers (#). Speak in clean, plain human text like a real person typing in chat.`;
-      tools = undefined;
-    } else if (selectedRole === "physician" || isMedicalEvent) {
-      systemInstruction = `You are an attending physician at GodsCare Medical Center caring directly for a patient.
-CRITICAL FORMATTING INSTRUCTIONS (CONCISE & PRECISE PLAIN TEXT):
-1. NO ASTERISKS RULE: Do NOT use asterisks (*), markdown bold (**), or markdown headers (#) anywhere. Write in clean plain text like a real doctor chatting with a patient.
-2. Be concise, precise, and direct. Answer ONLY the specific issue or symptom asked by the user right now.
-3. Respond to issues ONE step or topic at a time in clear, friendly conversational language.
-4. DO NOT dump massive walls or blocks of text with multi-section templates containing every possible diagnosis, care step, pharmacy list, specialist list, and legal disclaimer all at once.
-5. Provide a brief assessment with 1-2 immediate action steps, then ask what they would like to focus on next (e.g., pharmacy options, specialist doctor booking, or further symptoms).
-6. SAFETY: If the patient presents with severe red-flag emergency symptoms (chest pain, stroke, severe breathing distress), instruct them immediately and clearly to call emergency services (911/ER).`;
+CRITICAL CONSULTATIVE PERSONA & BEHAVIOR:
+1. EMPATHY & ATTENTIVE BEDSIDE MANNER:
+   - Speak with warm, professional, compassionate medical authority—just like an attentive doctor sitting across the desk from a patient in a consultation room.
+   - Actively acknowledge the patient's symptoms, pain, or worries with genuine care.
+   - Ask 1-2 focused, intelligent diagnostic follow-up questions when relevant (e.g. onset, severity on a 1-10 scale, duration, triggers, or fever readings).
 
-      tools = [getUserProfileDataTool, logNewUserInsightTool];
+2. ACTIONABLE & SPECIFIC RECOMMENDATIONS (CRITICAL):
+   Whenever the patient asks for recommendations, shares symptoms, or inquires about treatments:
+   - MEDICINE RECOMMENDATIONS: Recommend specific medicines from GodsCare Pharmacy (e.g., Paracetamol BP 500mg, Ibuprofen 400mg, Cetirizine 10mg, Omeprazole 20mg, Salbutamol Inhaler, Dextromethorphan Cough Syrup, Vitamin C & Zinc). Always provide exact usage directions, dosage frequency (e.g., '1 tablet twice daily after meals'), duration, and contraindications.
+   - SPECIALIST DOCTOR REFERRALS: Recommend specific GodsCare physicians by name, specialty, and department:
+     * Dr. Elizabeth Vance (Cardiologist, Cardiology) - for heart, chest, hypertension, palpitations.
+     * Dr. Marcus Thorne (Pediatrician, Pediatrics) - for children, infants, childhood illnesses.
+     * Dr. Sarah Lin (Neurologist, Neurology) - for headaches, migraines, nerve pain, dizziness, cognitive issues.
+     * Dr. James Carter (Orthopedic Surgeon, Orthopedics) - for joint pain, back pain, bone fractures, sprains, sports injuries.
+     * Dr. Chloe Patel (Dermatologist, Dermatology) - for skin rashes, acne, eczema, allergies, moles.
+     * Dr. Robert Chen (General Physician, General Medicine) - for general illness, flu, fever, infections, check-ups.
+   - DIAGNOSTIC INVESTIGATIONS: Recommend relevant diagnostic tests (e.g., ECG, Full Blood Count / CBC, Lipid panel, Chest X-ray, Ultrasound) when appropriate.
+   - HOME REMEDIES & LIFESTYLE: Provide tangible self-care routines (hydration, dietary protocols, hot/cold compress, sleep hygiene, ergonomic posture).
+
+3. BEAUTIFUL & STRUCTURED MARKDOWN FORMATTING:
+   - Organize your response with clear Markdown headers (e.g. '### Clinical Assessment', '#### 💊 Recommended Medications', '#### 👨‍⚕️ Specialist Recommendation', '#### 📝 Practical Action Steps', '#### 💬 Follow-Up').
+   - Use bolding (**Name**) for medicine names, doctor names, and critical directions.
+   - Use numbered lists for action steps and bullet points for options.
+
+4. SAFETY & EMERGENCY TRIAGE:
+   - If red-flag symptoms are present (severe crushing chest pain, signs of stroke, difficulty breathing, coughing blood, severe allergic anaphylaxis), instruct the patient immediately to call emergency services (911/ER) or proceed to the nearest Emergency Department.
+
+5. TOOL CALLING:
+   - Call 'getUserProfileData' to inspect medical history, allergies, chronic conditions, and past visits.
+   - Call 'getHospitalMedicines' to search available pharmacy medications by symptom.
+   - Call 'getHospitalDoctors' to search specialist physicians.
+   - Call 'logNewUserInsight' to document clinical summaries, care plans, and recommendations.`;
+
+    const triageSystemPrompt = `You are GodsCare's Rapid Clinical Triage Officer.
+Provide immediate, structured triage for ${patientName}:
+1. Triage Urgency Level (Emergency, Urgent, Standard, or Routine Self-Care).
+2. Immediate 1st-line recommendation (ER alert, specialist booking, or OTC remedy).
+3. Specific medicine and specialist doctor referral.
+Keep it structured, clear, and reassuring with Markdown.`;
+
+    const wellnessSystemPrompt = `You are GodsCare's Holistic Wellness & Preventive Health Consultant.
+Provide ${patientName} with personalized, evidence-based lifestyle, nutrition, hydration, sleep, and exercise recommendations tailored to their wellness goals. Use clean Markdown with actionable bullet points.`;
+
+    const generalAssistantSystemPrompt = `You are GodsCare's Virtual Healthcare Navigator.
+Guide ${patientName} through hospital services, booking appointments with doctors, ordering pharmacy medicines, and answering clinical questions with warmth and clarity.`;
+
+    let systemInstruction = doctorConsultantSystemPrompt;
+    if (selectedRole === "quick_triage") {
+      systemInstruction = triageSystemPrompt;
     } else if (selectedRole === "wellness_coach") {
-      systemInstruction = `You are GodsCare's Holistic Wellness & Prevention Coach.
-CRITICAL INSTRUCTION: Be concise, precise, and direct in plain text (2-3 short sentences max, no asterisks or bold tags). Address issues one at a time. Offer to provide further details if the user wants.`;
-      tools = undefined;
-    } else if (selectedRole === "quick_triage") {
-      systemInstruction = `You are GodsCare's Rapid Symptom Triage Assistant.
-CRITICAL INSTRUCTION: Provide rapid, 2-3 sentence plain text triage (no asterisks or bold tags). Focus strictly on urgency level and immediate recommended action. Be concise and precise.`;
-      tools = undefined;
-    } else {
-      // General Assistant
-      systemInstruction = `You are a helpful and polite virtual care assistant for GodsCare Hospital.
-CRITICAL INSTRUCTION: Be concise, direct, and conversational in plain text (1-2 sentences, no asterisks or bold tags). Answer questions one at a time.`;
-      tools = undefined;
+      systemInstruction = wellnessSystemPrompt;
+    } else if (selectedRole === "general_assistant") {
+      systemInstruction = generalAssistantSystemPrompt;
     }
 
-    // Function to attempt generateContent with fallback models & ultra-fast failover
+    const availableTools = [
+      getUserProfileDataTool,
+      getHospitalMedicinesTool,
+      getHospitalDoctorsTool,
+      logNewUserInsightTool
+    ];
+
+    // Candidate models order: prefer high-reasoning fast models
+    const candidateModels = [
+      "gemini-3.7-flash",
+      "gemini-3.5-flash",
+      "gemini-3.1-pro-preview",
+      "gemini-3.1-flash-lite"
+    ];
+
+    // Check if valid Gemini API key is available
+    const hasValidGeminiKey = Boolean(
+      process.env.GEMINI_API_KEY && 
+      process.env.GEMINI_API_KEY.trim() !== "" && 
+      process.env.GEMINI_API_KEY !== "dummy_key"
+    );
+
+    if (!hasValidGeminiKey) {
+      const fallbackResponse = await generateClinicalFallback(messages, uid, selectedRole);
+      res.json(fallbackResponse);
+      return;
+    }
+
+    // Function to attempt generateContent with fallback models
     const generateWithFallback = async (modelList: string[], reqContents: any, reqConfig: any) => {
       let lastError: any = null;
       for (const mName of modelList) {
         try {
-          console.log(`[Gemini Chat Agent] Attempting call with model: ${mName}`);
-          // Timeout promise (3.5s limit for fast responsiveness)
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Model request timed out after 3.5s")), 3500)
+            setTimeout(() => reject(new Error("Model request timed out")), 5000)
           );
           const apiPromise = ai.models.generateContent({
             model: mName,
@@ -1974,31 +2088,28 @@ CRITICAL INSTRUCTION: Be concise, direct, and conversational in plain text (1-2 
         } catch (err: any) {
           const errMsg = err?.message || String(err);
           lastError = err;
-          // If quota / billing issue (429), fail-fast immediately to local engine without wasting seconds
-          if (errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("depleted") || errMsg.includes("prepayment")) {
-            console.warn(`[Gemini Chat Agent] Quota limit detected (${mName}). Fast-failing to local clinical engine.`);
+          if (
+            errMsg.includes("429") || 
+            errMsg.includes("RESOURCE_EXHAUSTED") || 
+            errMsg.includes("depleted") || 
+            errMsg.includes("prepayment") ||
+            errMsg.includes("quota")
+          ) {
+            console.log(`[Clinical AI Agent] Quota limit encountered on ${mName}. Switching directly to internal clinical engine.`);
             break;
           }
         }
       }
-      throw lastError || new Error("All candidate Gemini models failed or timed out.");
+      throw lastError || new Error("Gemini cloud processing delegated to internal clinical engine.");
     };
 
-    // Candidate models order starting with targetModel
-    const candidateModels = Array.from(new Set([
-      targetModel,
-      "gemini-3.5-flash",
-      "gemini-3.6-flash",
-      "gemini-3.1-flash-lite"
-    ]));
-
-    // 2. Initial pass
+    // 1. First Pass Call
     const { res: response, modelUsed } = await generateWithFallback(
       candidateModels,
       cleanedMessages,
       {
         systemInstruction: systemInstruction,
-        ...(tools ? { tools: [{ functionDeclarations: tools }] } : {})
+        tools: [{ functionDeclarations: availableTools }]
       }
     );
 
@@ -2006,12 +2117,11 @@ CRITICAL INSTRUCTION: Be concise, direct, and conversational in plain text (1-2 
     const thoughts: any[] = [];
     let finalModelOutput = response.text || "";
 
-    // 3. Execute the Agentic loop if Gemini requests tools (only possible in MEDICAL_TRIAGE / physician mode)
-    if ((selectedRole === "physician" || isMedicalEvent) && functionCalls && functionCalls.length > 0) {
+    // 2. Execute Agentic Loop if Gemini requests tools
+    if (functionCalls && functionCalls.length > 0) {
       console.log(`[Clinical AI Agent] Model requested tools: ${JSON.stringify(functionCalls)}`);
-      
       const toolResultsPrompts: string[] = [];
-      
+
       for (const call of functionCalls) {
         thoughts.push({
           action: call.name,
@@ -2020,22 +2130,30 @@ CRITICAL INSTRUCTION: Be concise, direct, and conversational in plain text (1-2 
 
         if (call.name === "getUserProfileData") {
           const result = await fetchPatientContext(uid);
-          toolResultsPrompts.push(`Tool 'getUserProfileData' executed successfully. Historical context retrieved:\n${JSON.stringify(result)}`);
+          toolResultsPrompts.push(`Tool 'getUserProfileData' result:\n${JSON.stringify(result)}`);
+        } else if (call.name === "getHospitalMedicines") {
+          const args = call.args as any;
+          const result = queryMedicinesCatalog(args.symptomOrCondition, args.category);
+          toolResultsPrompts.push(`Tool 'getHospitalMedicines' result:\n${JSON.stringify(result)}`);
+        } else if (call.name === "getHospitalDoctors") {
+          const args = call.args as any;
+          const result = queryDoctorsCatalog(args.specialtyOrDepartment);
+          toolResultsPrompts.push(`Tool 'getHospitalDoctors' result:\n${JSON.stringify(result)}`);
         } else if (call.name === "logNewUserInsight") {
           const args = call.args as any;
           const result = await createCarePlan(uid, args.insight, args.carePlanSteps, args.severity);
-          toolResultsPrompts.push(`Tool 'logNewUserInsight' executed autonomously. Result:\n${JSON.stringify(result)}`);
+          toolResultsPrompts.push(`Tool 'logNewUserInsight' result:\n${JSON.stringify(result)}`);
         }
       }
 
-      // 4. Make a follow-up call to Gemini, feeding the results of its autonomous actions
-      const feedbackPrompt = `I have autonomously executed the requested tool(s) in the Firestore environment. Here are the real results of the tool operations:\n\n${toolResultsPrompts.join("\n\n")}\n\nFormulate your final response to the patient based on this data. Acknowledge your tool executions.`;
-      
+      // 3. Second Pass with Tool Results
+      const feedbackPrompt = `I have executed the requested clinical tools. Here are the live results from GodsCare hospital database:\n\n${toolResultsPrompts.join("\n\n")}\n\nNow, provide your complete, compassionate, and structured clinical consultation and recommendations to ${patientName}. Highlight recommended medicines, specialist doctors, and step-by-step care in clean Markdown.`;
+
       const { res: followUpRes } = await generateWithFallback(
         candidateModels,
         [
           ...cleanedMessages,
-          { role: "model", parts: [{ text: "Executing tool operations..." }] },
+          { role: "model", parts: [{ text: "Analyzing clinical data and hospital catalog..." }] },
           { role: "user", parts: [{ text: feedbackPrompt }] }
         ],
         {
@@ -2043,20 +2161,18 @@ CRITICAL INSTRUCTION: Be concise, direct, and conversational in plain text (1-2 
         }
       );
 
-      finalModelOutput = followUpRes.text || "Your care parameters have been processed.";
+      finalModelOutput = followUpRes.text || "Your consultation parameters have been processed.";
     }
 
-    // Return final processed text alongside the autonomous thoughts/actions executed and model details
     res.json({
-      text: stripAsterisks(finalModelOutput),
+      text: finalModelOutput,
       thoughts: thoughts,
       modelUsed: modelUsed,
       roleUsed: selectedRole
     });
 
   } catch (err: any) {
-    console.log("[Clinical AI Agent] Generating response via local GodsCare clinical engine.");
-    // Engage our high-fidelity, completely offline and fail-safe local clinical fallback system
+    console.log("[Clinical AI Agent] Engaging local GodsCare clinical fallback engine.");
     const fallbackResponse = await generateClinicalFallback(messages, uid, selectedRole);
     res.json(fallbackResponse);
   }

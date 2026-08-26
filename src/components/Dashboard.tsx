@@ -1,4 +1,5 @@
 import React from "react";
+import Markdown from "react-markdown";
 import { 
   collection, 
   addDoc, 
@@ -1080,7 +1081,7 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
                               {app.paymentStatus === "paid" ? (
                                 <span className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md">
                                   <CheckCircle className="h-3 w-3 text-emerald-600 shrink-0" />
-                                  <span>Consultation Fee Paid (₦{(app.amountPaid || bookingFee).toLocaleString()})</span>
+                                  <span>Consultation Fee Paid (₦{(app.paymentAmount || app.amountPaid || bookingFee).toLocaleString()})</span>
                                 </span>
                               ) : (
                                 <div className="flex flex-wrap items-center gap-2">
@@ -1660,7 +1661,13 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
                             ? 'bg-zinc-900 dark:bg-emerald-700 text-white rounded-tr-none' 
                             : 'bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 rounded-tl-none shadow-xs'
                         }`}>
-                          <p className="whitespace-pre-wrap">{msg.text}</p>
+                          {msg.role === 'user' ? (
+                            <p className="whitespace-pre-wrap">{msg.text}</p>
+                          ) : (
+                            <div className="markdown-content">
+                              <Markdown>{msg.text}</Markdown>
+                            </div>
+                          )}
                           
                           {/* Thoughts/Action Logs timeline */}
                           {msg.thoughts && msg.thoughts.length > 0 && (
@@ -1684,7 +1691,7 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
                     {aiLoading && (
                       <div className="flex items-center space-x-2 text-zinc-500 dark:text-zinc-400 text-xs font-mono">
                         <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
-                        <span>AI Agent is generating response using selected role model...</span>
+                        <span>Dr. GodsCare is preparing clinical evaluation and recommendations...</span>
                       </div>
                     )}
                     <div ref={messagesEndRef} />
@@ -1694,11 +1701,12 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
                   <div className="px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border-t border-zinc-100 dark:border-zinc-800 flex items-center gap-1.5 overflow-x-auto text-[10px]">
                     <span className="text-zinc-400 font-mono text-[9px] uppercase font-bold shrink-0">Quick Ask:</span>
                     {[
-                      "Chest pain & shortness of breath",
-                      "Fever & headache advice",
-                      "Over-the-counter flu remedy",
-                      "Schedule specialist visit",
-                      "Daily wellness & nutrition"
+                      "Recommend medicine for headache & fever",
+                      "Recommend specialist cardiologist",
+                      "Diet & lifestyle for high blood pressure",
+                      "Recommend cough & cold medication",
+                      "Stomach acid reflux & indigestion advice",
+                      "Fast triage: dizziness & fatigue"
                     ].map((chip, idx) => (
                       <button
                         key={idx}
