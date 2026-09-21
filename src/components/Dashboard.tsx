@@ -2462,13 +2462,43 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
                       const printWindow = window.open("", "_blank");
                       if (printWindow) {
                         printWindow.document.write(`
+                          <!DOCTYPE html>
                           <html>
                             <head>
                               <title>Invoice - ${selectedInvoice.reference}</title>
-                              <script src="https://cdn.tailwindcss.com"></script>
-                              <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
                               <style>
-                                body { font-family: 'Inter', sans-serif; padding: 40px; }
+                                * { box-sizing: border-box; margin: 0; padding: 0; }
+                                body { 
+                                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+                                  padding: 40px; 
+                                  background: #fff;
+                                  color: #0f172a;
+                                  line-height: 1.5;
+                                }
+                                .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+                                .font-bold { font-weight: 700; }
+                                .font-extrabold { font-weight: 800; }
+                                .flex { display: flex; }
+                                .items-center { align-items: center; }
+                                .justify-between { justify-content: space-between; }
+                                .gap-2 { gap: 0.5rem; }
+                                .gap-4 { gap: 1rem; }
+                                .border-b { border-bottom: 1px solid #e2e8f0; }
+                                .border-t { border-top: 1px solid #e2e8f0; }
+                                .border { border: 1px solid #e2e8f0; }
+                                .rounded-xl { border-radius: 0.75rem; }
+                                .rounded-lg { border-radius: 0.5rem; }
+                                .p-4 { padding: 1rem; }
+                                .p-6 { padding: 1.5rem; }
+                                .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+                                .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+                                .text-sm { font-size: 0.875rem; }
+                                .text-xs { font-size: 0.75rem; }
+                                .text-xl { font-size: 1.25rem; }
+                                .text-2xl { font-size: 1.5rem; }
+                                .text-slate-500, .text-zinc-500 { color: #64748b; }
+                                .text-emerald-600 { color: #059669; }
+                                .bg-emerald-50 { background-color: #ecfdf5; }
                                 @media print {
                                   body { padding: 0; }
                                 }

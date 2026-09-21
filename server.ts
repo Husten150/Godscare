@@ -3,7 +3,6 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
-import { GoogleGenAI, Type } from "@google/genai";
 import { initializeApp } from "firebase/app";
 import { 
   getFirestore, 
@@ -52,16 +51,6 @@ try {
 } catch (error) {
   console.error("[Firebase] Error loading configuration:", error);
 }
-
-// Initialize Gemini Client
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || "dummy_key",
-  httpOptions: {
-    headers: {
-      "User-Agent": "aistudio-build",
-    }
-  }
-});
 
 // ==========================================
 // PAYMENT GATEWAY API (PAYSTACK)
@@ -175,18 +164,183 @@ app.get("/api/payments/simulate-gate", (req: express.Request, res: express.Respo
     "Healthcare Payment Service";
 
   res.send(`
+    <!DOCTYPE html>
     <html>
       <head>
         <title>GodsCareHospital Sandbox Paystack Gateway</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <style>
-          body { font-family: 'Inter', sans-serif; }
-          .font-mono-card { font-family: 'JetBrains Mono', monospace; }
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+            background-color: #f1f5f9;
+            color: #27272a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 1rem;
+            line-height: 1.5;
+          }
+          .font-mono, .font-mono-card { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+          .max-w-2xl { max-width: 48rem; width: 100%; }
+          .gateway-card {
+            display: grid;
+            grid-template-columns: 1fr;
+            background: #ffffff;
+            border-radius: 1.5rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            width: 100%;
+          }
+          @media (min-width: 768px) {
+            .gateway-card { grid-template-columns: 5fr 7fr; }
+          }
+          .left-panel {
+            background-color: #18181b;
+            color: #ffffff;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 2rem;
+          }
+          @media (min-width: 768px) {
+            .left-panel { padding: 2rem; }
+          }
+          .right-panel {
+            padding: 1.5rem;
+            background-color: #fbfbfc;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 1.5rem;
+          }
+          @media (min-width: 768px) {
+            .right-panel { padding: 2rem; }
+          }
+          .badge {
+            font-size: 10px;
+            font-family: ui-monospace, monospace;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #34d399;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            padding: 0.25rem 0.6rem;
+            border-radius: 0.375rem;
+            display: inline-block;
+          }
+          .border-divider { border-top: 1px solid #27272a; padding-top: 1rem; }
+          .border-divider-light { border-bottom: 1px solid #f4f4f5; padding-bottom: 1rem; }
+          .btn-primary {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: #059669;
+            color: #ffffff;
+            border: none;
+            border-radius: 0.75rem;
+            font-size: 0.75rem;
+            font-family: ui-monospace, monospace;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: background-color 0.2s;
+          }
+          .btn-primary:hover { background-color: #047857; }
+          .btn-secondary {
+            display: block;
+            width: 100%;
+            padding: 0.625rem;
+            text-align: center;
+            border: 1px solid #e4e4e7;
+            color: #71717a;
+            border-radius: 0.75rem;
+            font-size: 0.75rem;
+            font-family: ui-monospace, monospace;
+            text-transform: uppercase;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+          }
+          .btn-secondary:hover { background-color: #f4f4f5; color: #18181b; }
+          .input-field {
+            width: 100%;
+            padding: 0.625rem 1rem;
+            background: #ffffff;
+            border: 1px solid #e4e4e7;
+            border-radius: 0.75rem;
+            font-size: 0.875rem;
+            font-family: ui-monospace, monospace;
+            outline: none;
+            transition: border-color 0.2s;
+          }
+          .input-field:focus { border-color: #18181b; }
+          .tab-btn {
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding-bottom: 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #a1a1aa;
+            cursor: pointer;
+          }
+          .tab-btn.active { color: #059669; border-bottom-color: #059669; }
+          .card-chip {
+            width: 100%;
+            height: 11rem;
+            border-radius: 1rem;
+            background: linear-gradient(135deg, #27272a 0%, #09090b 100%);
+            padding: 1.5rem;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+          }
+          .quick-card-btn {
+            padding: 0.375rem 0.5rem;
+            border: 1px solid #e4e4e7;
+            border-radius: 0.5rem;
+            font-size: 10px;
+            font-weight: 700;
+            color: #52525b;
+            background: #ffffff;
+            cursor: pointer;
+            text-align: center;
+          }
+          .quick-card-btn:hover { background: #f4f4f5; border-color: #d4d4d8; }
+          .grid-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.375rem; }
+          @media (max-width: 480px) {
+            .grid-cards { grid-template-columns: repeat(2, 1fr); }
+          }
+          .flex { display: flex; }
+          .items-center { align-items: center; }
+          .justify-between { justify-content: space-between; }
+          .gap-1 { gap: 0.25rem; }
+          .gap-2 { gap: 0.5rem; }
+          .space-y-4 > * + * { margin-top: 1rem; }
+          .space-y-2 > * + * { margin-top: 0.5rem; }
+          .text-xs { font-size: 0.75rem; }
+          .text-sm { font-size: 0.875rem; }
+          .text-xl { font-size: 1.25rem; }
+          .text-2xl { font-size: 1.5rem; }
+          .font-bold { font-weight: 700; }
+          .font-extrabold { font-weight: 800; }
+          .text-emerald-400 { color: #34d399; }
+          .text-zinc-400 { color: #a1a1aa; }
+          .text-zinc-500 { color: #71717a; }
+          .text-zinc-200 { color: #e4e4e7; }
+          .text-zinc-900 { color: #18181b; }
+          .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .break-all { word-break: break-all; }
         </style>
       </head>
-      <body class="bg-slate-100 flex items-center justify-center min-h-screen p-4 text-zinc-800">
-        <div class="max-w-2xl w-full bg-white rounded-3xl border border-slate-200/80 shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12">
+      <body>
+        <div class="max-w-2xl gateway-card">
           
           <!-- Left side: Order & Brand Info -->
           <div class="md:col-span-5 bg-zinc-900 text-white p-6 md:p-8 flex flex-col justify-between space-y-8">
@@ -1515,87 +1669,87 @@ async function createCarePlan(uid: string, insight: string, carePlanSteps: strin
   }
 }
 
-// Tool definitions for Gemini Function Calling
-const getUserProfileDataTool = {
-  name: "getUserProfileData",
-  description: "Queries historical context from Firestore including the user's patient profile, physical medical history, allergies, chronic conditions, and previous/pending appointments.",
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      uid: {
-        type: Type.STRING,
-        description: "The patient's unique Firestore identifier (UID)."
-      }
-    },
-    required: ["uid"]
+// Pre-seeded default doctors list for the clinical ecosystem
+const INITIAL_DOCTORS = [
+  {
+    id: "doc-vance",
+    name: "Dr. Elizabeth Vance",
+    specialty: "Cardiologist",
+    department: "Cardiology",
+    experience: "15 years",
+    education: "M.D. Stanford University School of Medicine",
+    rating: 4.9,
+    availableDays: ["Monday", "Wednesday", "Friday"],
+    availableHours: ["09:00 AM", "10:00 AM", "11:00 AM", "02:00 PM", "03:00 PM"],
+    image: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400",
+    bio: "Dr. Vance is a board-certified cardiologist with a passion for preventive medicine and non-invasive cardiac imaging techniques."
+  },
+  {
+    id: "doc-thorne",
+    name: "Dr. Marcus Thorne",
+    specialty: "Pediatrician",
+    department: "Pediatrics",
+    experience: "10 years",
+    education: "M.D. Johns Hopkins University School of Medicine",
+    rating: 4.8,
+    availableDays: ["Tuesday", "Thursday", "Friday"],
+    availableHours: ["09:00 AM", "10:30 AM", "11:30 AM", "01:30 PM", "02:30 PM", "04:00 PM"],
+    image: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400",
+    bio: "Dedicated to providing compassionate, child-centric care and supporting families through every step of their children's development."
+  },
+  {
+    id: "doc-lin",
+    name: "Dr. Sarah Lin",
+    specialty: "Neurologist",
+    department: "Neurology",
+    experience: "12 years",
+    education: "Ph.D. & M.D. Harvard Medical School",
+    rating: 4.95,
+    availableDays: ["Monday", "Tuesday", "Thursday"],
+    availableHours: ["10:00 AM", "11:00 AM", "02:00 PM", "03:30 PM"],
+    image: "https://images.unsplash.com/photo-1594824813573-246434de83fb?auto=format&fit=crop&q=80&w=400",
+    bio: "Dr. Lin is an expert neuroscientist and neurologist, specializing in neurodegenerative conditions, migraines, and cognitive care."
+  },
+  {
+    id: "doc-carter",
+    name: "Dr. James Carter",
+    specialty: "Orthopedic Surgeon",
+    department: "Orthopedics",
+    experience: "14 years",
+    education: "M.D. Yale School of Medicine",
+    rating: 4.7,
+    availableDays: ["Wednesday", "Thursday", "Friday"],
+    availableHours: ["08:30 AM", "10:00 AM", "11:30 AM", "01:00 PM", "03:00 PM"],
+    image: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=400",
+    bio: "Focuses on sports injuries, advanced arthroscopic joint repairs, and personalized rehabilitation programs for professional athletes and active patients."
+  },
+  {
+    id: "doc-patel",
+    name: "Dr. Chloe Patel",
+    specialty: "Dermatologist",
+    department: "Dermatology",
+    experience: "8 years",
+    education: "M.D. University of Michigan",
+    rating: 4.9,
+    availableDays: ["Monday", "Wednesday", "Thursday"],
+    availableHours: ["09:30 AM", "11:00 AM", "02:00 PM", "03:00 PM", "04:30 PM"],
+    image: "https://images.unsplash.com/photo-1527613426441-4da17471b66d?auto=format&fit=crop&q=80&w=400",
+    bio: "Provides advanced clinical, surgical, and cosmetic dermatology solutions, focusing on acne care, eczema, and skin cancer screening."
+  },
+  {
+    id: "doc-chen",
+    name: "Dr. Robert Chen",
+    specialty: "General Physician",
+    department: "General Medicine",
+    experience: "18 years",
+    education: "M.D. Columbia University Vagelos College of Physicians and Surgeons",
+    rating: 4.85,
+    availableDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    availableHours: ["09:00 AM", "10:30 AM", "12:00 PM", "02:00 PM", "03:30 PM"],
+    image: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=400",
+    bio: "A trusted family physician specialized in comprehensive diagnostic evaluations, chronic disease management, and long-term vitality counseling."
   }
-};
-
-const getHospitalMedicinesTool = {
-  name: "getHospitalMedicines",
-  description: "Queries the GodsCare Hospital Pharmacy catalog to retrieve available medications, prices (NGN), categories, indicated symptoms, and dosage descriptions.",
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      symptomOrCondition: {
-        type: Type.STRING,
-        description: "The symptom, disease, or medical condition to search medicines for (e.g., 'fever', 'headache', 'allergy', 'hypertension', 'cough', 'acid reflux', 'pain')."
-      },
-      category: {
-        type: Type.STRING,
-        enum: ["all", "mild", "moderate", "severe"],
-        description: "Optional medicine severity category filter."
-      }
-    },
-    required: ["symptomOrCondition"]
-  }
-};
-
-const getHospitalDoctorsTool = {
-  name: "getHospitalDoctors",
-  description: "Queries the GodsCare specialist doctor directory to find available doctors by specialty, department, experience, rating, or medical concern.",
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      specialtyOrDepartment: {
-        type: Type.STRING,
-        description: "The specialty or department needed (e.g., 'Cardiology', 'Pediatrics', 'Neurology', 'Orthopedics', 'Dermatology', 'General Medicine')."
-      }
-    },
-    required: ["specialtyOrDepartment"]
-  }
-};
-
-const logNewUserInsightTool = {
-  name: "logNewUserInsight",
-  description: "Autonomously saves structured medical diagnostic insights, clinical advisories, recommended medicines, and step-by-step care plans back into Firestore to create actionable pathways.",
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      uid: {
-        type: Type.STRING,
-        description: "The patient's unique Firestore identifier (UID)."
-      },
-      insight: {
-        type: Type.STRING,
-        description: "A comprehensive summary of the clinical consultation, differential diagnosis, and recommendations provided."
-      },
-      carePlanSteps: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.STRING
-        },
-        description: "Actionable steps, self-care instructions, or medication guidelines for the patient."
-      },
-      severity: {
-        type: Type.STRING,
-        enum: ["low", "medium", "high"],
-        description: "Clinical priority / severity classification."
-      }
-    },
-    required: ["uid", "insight", "carePlanSteps", "severity"]
-  }
-};
+];
 
 // Helper to detect simple casual greetings and non-symptom small talk
 function isCasualGreeting(text: string): boolean {
@@ -1654,38 +1808,50 @@ function queryDoctorsCatalog(specialtyOrDepartment: string) {
   );
 }
 
-// Helper to generate clinical fallback response if Gemini API key quota is depleted or offline
-async function generateClinicalFallback(messages: any[], uid: string, role: string = "physician") {
+// Handcrafted Local Clinical Consultation Engine
+async function generateLocalClinicalConsultation(messages: any[], uid: string, role: string = "physician") {
   try {
-    // 1. Extract the last user message to assess symptoms
+    // 1. Extract latest user message
     const userMessages = messages.filter(m => m.role === "user");
-    const lastMessageText = userMessages.length > 0 
-      ? userMessages[userMessages.length - 1].parts?.[0]?.text || ""
-      : "";
+    let lastMessageText = "";
+    if (userMessages.length > 0) {
+      const lastMsg = userMessages[userMessages.length - 1];
+      if (lastMsg.parts && Array.isArray(lastMsg.parts) && lastMsg.parts.length > 0) {
+        lastMessageText = lastMsg.parts.map((p: any) => p.text || "").join(" ").trim();
+      } else if (typeof lastMsg.content === "string") {
+        lastMessageText = lastMsg.content;
+      }
+    }
     
+    if (!lastMessageText) {
+      lastMessageText = "Hello doctor";
+    }
+
     const textLower = lastMessageText.toLowerCase();
     
-    // 2. Fetch context from DB to make it personal
+    // 2. Fetch context from DB to personalize
     const context = await fetchPatientContext(uid);
     const patientName = context && !context.error && context.profile ? context.profile.fullName || "Valued Patient" : "Valued Patient";
 
-    // Handle casual greetings / simple small talk cleanly
+    // Handle casual greetings / simple small talk
     if (isCasualGreeting(lastMessageText)) {
-      let greetingText = `### Welcome to GodsCare Medical Center\n\nHello **${patientName}**, I am **Dr. GodsCare**, your Lead Attending Physician and Clinical Consultant.\n\nI am here to attend to all your health concerns, assess any symptoms you are experiencing, recommend appropriate medications, or guide you to our hospital specialists.\n\n**How may I assist your health and well-being today?**`;
+      let greetingText = `### Welcome to GodsCare Medical Center\n\nHello **${patientName}**, I am **Dr. GodsCare**, your Lead Attending Physician and Clinical Consultant.\n\nI am here to attend directly to all your health concerns, evaluate any symptoms you are experiencing, recommend appropriate medications from our pharmacy, or guide you to our specialist doctors.\n\n**How may I assist your health and well-being today?**`;
       if (textLower.includes("thank")) {
-        greetingText = `### You are Most Welcome\n\nIt is my absolute pleasure to care for your health, **${patientName}**! Please do not hesitate to ask if any other symptoms arise or if you need further medication or specialist recommendations.\n\n*Wishing you vibrant health and speedy vitality!*`;
+        greetingText = `### You are Most Welcome\n\nIt is my absolute pleasure to care for your health, **${patientName}**! Please let me know whenever any other symptoms arise or if you need further medication or specialist doctor recommendations.\n\n*Wishing you vibrant health and speedy recovery!*`;
       } else if (textLower.includes("how are you")) {
-        greetingText = `### Hello ${patientName}\n\nI am doing excellently and fully on duty to attend to your medical needs! How have you been feeling today? Please share any symptoms, questions, or medical recommendations you need.`;
+        greetingText = `### Hello ${patientName}\n\nI am doing excellently and fully on duty to attend to your medical needs! How have you been feeling today? Please feel free to share any symptoms, questions, or medical guidance you need.`;
       }
       return {
         text: greetingText,
-        thoughts: [],
-        modelUsed: "gemini-3.7-flash",
+        thoughts: [
+          { action: "getUserProfileData", arguments: { uid } }
+        ],
+        modelUsed: "GodsCare-Local-Clinical-Engine",
         roleUsed: role
       };
     }
 
-    // 3. Determine specialty, severity, differentials, medicines, and doctor recommendations
+    // 3. Clinical Triage & Differential Diagnosis
     let specialty = "General Medicine";
     let department = "General Medicine";
     let severity = "low";
@@ -1702,12 +1868,12 @@ async function generateClinicalFallback(messages: any[], uid: string, role: stri
       severity = "high";
       specialty = "Cardiology / Emergency Medicine";
       department = "Cardiology";
-      assessment = "Your presentation suggests acute cardiopulmonary distress or possible vascular compromise requiring immediate emergency triage.";
+      assessment = "Your symptoms indicate acute cardiopulmonary distress or potential vascular compromise requiring immediate emergency triage.";
       recommendedDocs = queryDoctorsCatalog("Cardiology");
       careSteps = [
-        "**CALL EMERGENCY SERVICES (911 / Local Emergency) IMMEDIATELY.** Do not attempt to drive yourself.",
-        "Sit in a comfortable semi-upright position with supported back to minimize cardiac and respiratory workload.",
-        "Loosen tight clothing around your neck, chest, and waist to facilitate optimal oxygen intake.",
+        "**CALL EMERGENCY SERVICES (911 / Local Emergency Line) IMMEDIATELY.** Do not attempt to drive yourself.",
+        "Sit in a comfortable semi-upright position with back support to reduce cardiac workload.",
+        "Loosen tight clothing around your neck, chest, and waist.",
         "Keep calm and avoid any physical exertion or sudden movements while emergency personnel are en route."
       ];
     }
@@ -1723,7 +1889,7 @@ async function generateClinicalFallback(messages: any[], uid: string, role: stri
       recommendedDocs = queryDoctorsCatalog("Cardiology");
       careSteps = [
         "Record your resting blood pressure and pulse twice daily (morning upon waking and evening before sleep).",
-        "Restrict dietary sodium intake strictly to under 1,500mg per day and avoid stimulants like energy drinks and excessive caffeine.",
+        "Restrict dietary sodium intake strictly to under 1,500mg per day and avoid stimulants like energy drinks and excess caffeine.",
         "Engage in 20 minutes of daily low-impact walking and diaphragmatic breathing."
       ];
       lifestyleTips = [
@@ -1858,12 +2024,12 @@ async function generateClinicalFallback(messages: any[], uid: string, role: stri
         "Elevate the head of your bed by 6 inches if nighttime acid reflux is present."
       ];
     }
-    // General Consultation & Recommendations
+    // General Health Consultation & Guidance
     else {
       severity = "low";
       specialty = "General Medicine";
       department = "General Medicine";
-      assessment = "Comprehensive health assessment and preventative clinical wellness guidance.";
+      assessment = "Comprehensive clinical evaluation and preventative wellness guidance.";
       recommendedMeds = [
         MEDICINES.find(m => m.id === "med-1") || MEDICINES[0],
         MEDICINES.find(m => m.id === "med-3") || MEDICINES[2]
@@ -1880,38 +2046,28 @@ async function generateClinicalFallback(messages: any[], uid: string, role: stri
       ];
     }
 
-    // Build comprehensive, doctor-like markdown response
+    // Format Clinical Consultation Response
     let responseText = "";
-
     if (isRedFlag) {
       responseText = `### 🚨 Urgent Clinical Assessment\n\nHello **${patientName}**, thank you for reaching out. Based on the symptoms you described ("*${lastMessageText}*"), this is an **urgent red-flag presentation** that requires immediate evaluation.\n\n#### ⚠️ Clinical Assessment\n${assessment}\n\n#### 🚑 Immediate Life-Saving Action Steps\n${careSteps.map((step, idx) => `${idx + 1}. ${step}`).join("\n")}\n\n#### 👨‍⚕️ Emergency Specialist Referral\nOur **Cardiology & Emergency Department** is on standby. Once emergency stabilization is arranged, you can consult with **${recommendedDocs[0]?.name || "Dr. Elizabeth Vance"}** (${recommendedDocs[0]?.specialty || "Cardiologist"}).\n\n*Please seek immediate emergency medical care.*`;
     } else {
-      responseText = `### 🩺 GodsCare Clinical Consultation\n\nHello **${patientName}**, I have carefully reviewed your symptoms and concerns ("*${lastMessageText}*"). Here is my clinical evaluation and structured recommendations for your recovery:\n\n#### 📋 Clinical Assessment\n${assessment}\n\n#### 💊 Recommended Medications (GodsCare Pharmacy)\n${recommendedMeds.map(m => `- **${m.name}** (₦${m.price.toLocaleString()}) — *${m.description}*\n  *Indication:* Relieves ${m.symptoms.join(", ")}.\n  *Usage:* Take strictly per label directions with a full glass of water.`).join("\n\n")}\n\n#### 👨‍⚕️ Recommended GodsCare Specialist\n${recommendedDocs.slice(0, 1).map(d => `- **${d.name}** — **${d.specialty}** (${d.department})\n  *Experience:* ${d.experience} | *Rating:* ⭐ ${d.rating}\n  *Bio:* ${d.bio}\n  *Available Days:* ${d.availableDays.join(", ")}`).join("\n")}\n\n#### 📝 Practical Care Steps\n${careSteps.map((step, idx) => `${idx + 1}. ${step}`).join("\n")}\n\n${lifestyleTips.length > 0 ? `#### 🌿 Supportive Lifestyle & Dietary Advice\n${lifestyleTips.map(tip => `- ${tip}`).join("\n")}\n\n` : ""}#### 💬 Doctor's Follow-up\nHow long have you noticed these symptoms, and would you like me to guide you to book a direct appointment with **${recommendedDocs[0]?.name || "our specialist"}** or prepare these medicines from our pharmacy?`;
+      responseText = `### 🩺 GodsCare Clinical Consultation\n\nHello **${patientName}**, I have carefully evaluated your inquiry and symptoms ("*${lastMessageText}*"). Here is my clinical evaluation and structured recommendations for your recovery:\n\n#### 📋 Clinical Assessment\n${assessment}\n\n#### 💊 Recommended Medications (GodsCare Pharmacy)\n${recommendedMeds.map(m => `- **${m.name}** (₦${m.price.toLocaleString()}) — *${m.description}*\n  *Indication:* Relieves ${m.symptoms.join(", ")}.\n  *Usage:* Take strictly per label directions with a full glass of water.`).join("\n\n")}\n\n#### 👨‍⚕️ Recommended GodsCare Specialist\n${recommendedDocs.slice(0, 1).map(d => `- **${d.name}** — **${d.specialty}** (${d.department})\n  *Experience:* ${d.experience} | *Rating:* ⭐ ${d.rating}\n  *Bio:* ${d.bio}\n  *Available Days:* ${d.availableDays.join(", ")}`).join("\n")}\n\n#### 📝 Practical Care Steps\n${careSteps.map((step, idx) => `${idx + 1}. ${step}`).join("\n")}\n\n${lifestyleTips.length > 0 ? `#### 🌿 Supportive Lifestyle & Dietary Advice\n${lifestyleTips.map(tip => `- ${tip}`).join("\n")}\n\n` : ""}#### 💬 Doctor's Follow-up\nHow long have you experienced these symptoms, and would you like me to guide you to book a direct consultation with **${recommendedDocs[0]?.name || "our specialist"}** or prepare these medicines from our pharmacy?`;
     }
 
-    // Log to Firestore Care Plans
+    // Autonomously log Care Plan to Firestore
     try {
       const briefInsight = `Consultation for "${lastMessageText.slice(0, 80)}". Assessment: ${assessment.slice(0, 100)}`;
       await createCarePlan(uid, briefInsight, careSteps, severity);
     } catch (fsErr) {
-      console.error("[Clinical Fallback] Failed to log CarePlan to Firestore:", fsErr);
+      console.error("[Clinical Engine] Failed to log CarePlan to Firestore:", fsErr);
     }
 
     return {
       text: responseText,
       thoughts: [
-        {
-          action: "getUserProfileData",
-          arguments: { uid }
-        },
-        {
-          action: "getHospitalMedicines",
-          arguments: { symptomOrCondition: lastMessageText }
-        },
-        {
-          action: "getHospitalDoctors",
-          arguments: { specialtyOrDepartment: department }
-        },
+        { action: "getUserProfileData", arguments: { uid } },
+        { action: "getHospitalMedicines", arguments: { symptomOrCondition: lastMessageText } },
+        { action: "getHospitalDoctors", arguments: { specialtyOrDepartment: department } },
         {
           action: "logNewUserInsight",
           arguments: {
@@ -1922,348 +2078,40 @@ async function generateClinicalFallback(messages: any[], uid: string, role: stri
           }
         }
       ],
-      modelUsed: "gemini-3.7-flash",
+      modelUsed: "GodsCare-Local-Clinical-Engine",
       roleUsed: role
     };
-  } catch (fallbackErr) {
-    console.error("[Critical Fallback Failure]:", fallbackErr);
+  } catch (err) {
+    console.error("[Clinical Engine Error]:", err);
     return {
       text: "### GodsCare Clinical Care\n\nI have received your medical inquiry. Please describe your symptoms (e.g. pain location, duration, fever, or specific medication requests), and I will provide you with personalized doctor and pharmacy recommendations.",
-      thoughts: []
+      thoughts: [],
+      modelUsed: "GodsCare-Local-Clinical-Engine",
+      roleUsed: role
     };
   }
 }
 
-// Agent endpoint supporting multi-turn doctor consultation, tool calling, and structured recommendations
-app.post("/api/gemini/agent", async (req: express.Request, res: express.Response) => {
-  const { messages, uid, mode, role } = req.body;
+// Clinical agent consultation endpoint (used by Dashboard & FloatingAIAssistant)
+const handleClinicalConsultation = async (req: express.Request, res: express.Response) => {
+  const { messages, uid, role } = req.body;
   if (!uid || !messages) {
     res.status(400).json({ error: "Missing required clinical parameters: messages, uid." });
     return;
   }
 
-  let selectedRole = role || "physician";
+  const selectedRole = role || "physician";
+  const result = await generateLocalClinicalConsultation(messages, uid, selectedRole);
+  res.json(result);
+};
 
-  try {
-    // Clean up messages: Ensure conversation doesn't start with a model message to prevent 400 Bad Request
-    let cleanedMessages = [...messages];
-    if (cleanedMessages.length > 0 && cleanedMessages[0].role === "model") {
-      cleanedMessages.shift();
-    }
-
-    // If no user message is left, create a default user message to avoid empty contents
-    if (cleanedMessages.length === 0) {
-      cleanedMessages = [{ role: "user", parts: [{ text: "Hello doctor" }] }];
-    }
-
-    // Extract the latest user message text to classify the intent
-    let latestText = "";
-    for (let i = cleanedMessages.length - 1; i >= 0; i--) {
-      if (cleanedMessages[i].role === "user") {
-        const parts = cleanedMessages[i].parts;
-        if (parts && parts.length > 0) {
-          latestText = parts.map((p: any) => p.text || "").join(" ").trim();
-          break;
-        }
-      }
-    }
-
-    if (!latestText) {
-      latestText = "Hello doctor";
-    }
-
-    // Fetch patient context early to enrich prompt
-    let patientData: any = null;
-    try {
-      patientData = await fetchPatientContext(uid);
-    } catch (e) {
-      console.warn("Could not fetch patient data early:", e);
-    }
-
-    const patientName = patientData?.profile?.fullName || "Valued Patient";
-
-    // Build rich, consultative system prompt
-    const doctorConsultantSystemPrompt = `You are Dr. GodsCare, the Senior Attending Physician & Lead Clinical Consultant at GodsCare Medical Center.
-You are attending directly to ${patientName} (Patient ID: ${uid}).
-
-CRITICAL CONSULTATIVE PERSONA & BEHAVIOR:
-1. EMPATHY & ATTENTIVE BEDSIDE MANNER:
-   - Speak with warm, professional, compassionate medical authority—just like an attentive doctor sitting across the desk from a patient in a consultation room.
-   - Actively acknowledge the patient's symptoms, pain, or worries with genuine care.
-   - Ask 1-2 focused, intelligent diagnostic follow-up questions when relevant (e.g. onset, severity on a 1-10 scale, duration, triggers, or fever readings).
-
-2. ACTIONABLE & SPECIFIC RECOMMENDATIONS (CRITICAL):
-   Whenever the patient asks for recommendations, shares symptoms, or inquires about treatments:
-   - MEDICINE RECOMMENDATIONS: Recommend specific medicines from GodsCare Pharmacy (e.g., Paracetamol BP 500mg, Ibuprofen 400mg, Cetirizine 10mg, Omeprazole 20mg, Salbutamol Inhaler, Dextromethorphan Cough Syrup, Vitamin C & Zinc). Always provide exact usage directions, dosage frequency (e.g., '1 tablet twice daily after meals'), duration, and contraindications.
-   - SPECIALIST DOCTOR REFERRALS: Recommend specific GodsCare physicians by name, specialty, and department:
-     * Dr. Elizabeth Vance (Cardiologist, Cardiology) - for heart, chest, hypertension, palpitations.
-     * Dr. Marcus Thorne (Pediatrician, Pediatrics) - for children, infants, childhood illnesses.
-     * Dr. Sarah Lin (Neurologist, Neurology) - for headaches, migraines, nerve pain, dizziness, cognitive issues.
-     * Dr. James Carter (Orthopedic Surgeon, Orthopedics) - for joint pain, back pain, bone fractures, sprains, sports injuries.
-     * Dr. Chloe Patel (Dermatologist, Dermatology) - for skin rashes, acne, eczema, allergies, moles.
-     * Dr. Robert Chen (General Physician, General Medicine) - for general illness, flu, fever, infections, check-ups.
-   - DIAGNOSTIC INVESTIGATIONS: Recommend relevant diagnostic tests (e.g., ECG, Full Blood Count / CBC, Lipid panel, Chest X-ray, Ultrasound) when appropriate.
-   - HOME REMEDIES & LIFESTYLE: Provide tangible self-care routines (hydration, dietary protocols, hot/cold compress, sleep hygiene, ergonomic posture).
-
-3. BEAUTIFUL & STRUCTURED MARKDOWN FORMATTING:
-   - Organize your response with clear Markdown headers (e.g. '### Clinical Assessment', '#### 💊 Recommended Medications', '#### 👨‍⚕️ Specialist Recommendation', '#### 📝 Practical Action Steps', '#### 💬 Follow-Up').
-   - Use bolding (**Name**) for medicine names, doctor names, and critical directions.
-   - Use numbered lists for action steps and bullet points for options.
-
-4. SAFETY & EMERGENCY TRIAGE:
-   - If red-flag symptoms are present (severe crushing chest pain, signs of stroke, difficulty breathing, coughing blood, severe allergic anaphylaxis), instruct the patient immediately to call emergency services (911/ER) or proceed to the nearest Emergency Department.
-
-5. TOOL CALLING:
-   - Call 'getUserProfileData' to inspect medical history, allergies, chronic conditions, and past visits.
-   - Call 'getHospitalMedicines' to search available pharmacy medications by symptom.
-   - Call 'getHospitalDoctors' to search specialist physicians.
-   - Call 'logNewUserInsight' to document clinical summaries, care plans, and recommendations.`;
-
-    const triageSystemPrompt = `You are GodsCare's Rapid Clinical Triage Officer.
-Provide immediate, structured triage for ${patientName}:
-1. Triage Urgency Level (Emergency, Urgent, Standard, or Routine Self-Care).
-2. Immediate 1st-line recommendation (ER alert, specialist booking, or OTC remedy).
-3. Specific medicine and specialist doctor referral.
-Keep it structured, clear, and reassuring with Markdown.`;
-
-    const wellnessSystemPrompt = `You are GodsCare's Holistic Wellness & Preventive Health Consultant.
-Provide ${patientName} with personalized, evidence-based lifestyle, nutrition, hydration, sleep, and exercise recommendations tailored to their wellness goals. Use clean Markdown with actionable bullet points.`;
-
-    const generalAssistantSystemPrompt = `You are GodsCare's Virtual Healthcare Navigator.
-Guide ${patientName} through hospital services, booking appointments with doctors, ordering pharmacy medicines, and answering clinical questions with warmth and clarity.`;
-
-    let systemInstruction = doctorConsultantSystemPrompt;
-    if (selectedRole === "quick_triage") {
-      systemInstruction = triageSystemPrompt;
-    } else if (selectedRole === "wellness_coach") {
-      systemInstruction = wellnessSystemPrompt;
-    } else if (selectedRole === "general_assistant") {
-      systemInstruction = generalAssistantSystemPrompt;
-    }
-
-    const availableTools = [
-      getUserProfileDataTool,
-      getHospitalMedicinesTool,
-      getHospitalDoctorsTool,
-      logNewUserInsightTool
-    ];
-
-    // Candidate models order: prefer high-reasoning fast models
-    const candidateModels = [
-      "gemini-3.7-flash",
-      "gemini-3.5-flash",
-      "gemini-3.1-pro-preview",
-      "gemini-3.1-flash-lite"
-    ];
-
-    // Check if valid Gemini API key is available
-    const hasValidGeminiKey = Boolean(
-      process.env.GEMINI_API_KEY && 
-      process.env.GEMINI_API_KEY.trim() !== "" && 
-      process.env.GEMINI_API_KEY !== "dummy_key"
-    );
-
-    if (!hasValidGeminiKey) {
-      const fallbackResponse = await generateClinicalFallback(messages, uid, selectedRole);
-      res.json(fallbackResponse);
-      return;
-    }
-
-    // Function to attempt generateContent with fallback models
-    const generateWithFallback = async (modelList: string[], reqContents: any, reqConfig: any) => {
-      let lastError: any = null;
-      for (const mName of modelList) {
-        try {
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Model request timed out")), 5000)
-          );
-          const apiPromise = ai.models.generateContent({
-            model: mName,
-            contents: reqContents,
-            config: reqConfig
-          });
-
-          const res: any = await Promise.race([apiPromise, timeoutPromise]);
-          return { res, modelUsed: mName };
-        } catch (err: any) {
-          const errMsg = err?.message || String(err);
-          lastError = err;
-          if (
-            errMsg.includes("429") || 
-            errMsg.includes("RESOURCE_EXHAUSTED") || 
-            errMsg.includes("depleted") || 
-            errMsg.includes("prepayment") ||
-            errMsg.includes("quota")
-          ) {
-            console.log(`[Clinical AI Agent] Quota limit encountered on ${mName}. Switching directly to internal clinical engine.`);
-            break;
-          }
-        }
-      }
-      throw lastError || new Error("Gemini cloud processing delegated to internal clinical engine.");
-    };
-
-    // 1. First Pass Call
-    const { res: response, modelUsed } = await generateWithFallback(
-      candidateModels,
-      cleanedMessages,
-      {
-        systemInstruction: systemInstruction,
-        tools: [{ functionDeclarations: availableTools }]
-      }
-    );
-
-    const functionCalls = response.functionCalls;
-    const thoughts: any[] = [];
-    let finalModelOutput = response.text || "";
-
-    // 2. Execute Agentic Loop if Gemini requests tools
-    if (functionCalls && functionCalls.length > 0) {
-      console.log(`[Clinical AI Agent] Model requested tools: ${JSON.stringify(functionCalls)}`);
-      const toolResultsPrompts: string[] = [];
-
-      for (const call of functionCalls) {
-        thoughts.push({
-          action: call.name,
-          arguments: call.args
-        });
-
-        if (call.name === "getUserProfileData") {
-          const result = await fetchPatientContext(uid);
-          toolResultsPrompts.push(`Tool 'getUserProfileData' result:\n${JSON.stringify(result)}`);
-        } else if (call.name === "getHospitalMedicines") {
-          const args = call.args as any;
-          const result = queryMedicinesCatalog(args.symptomOrCondition, args.category);
-          toolResultsPrompts.push(`Tool 'getHospitalMedicines' result:\n${JSON.stringify(result)}`);
-        } else if (call.name === "getHospitalDoctors") {
-          const args = call.args as any;
-          const result = queryDoctorsCatalog(args.specialtyOrDepartment);
-          toolResultsPrompts.push(`Tool 'getHospitalDoctors' result:\n${JSON.stringify(result)}`);
-        } else if (call.name === "logNewUserInsight") {
-          const args = call.args as any;
-          const result = await createCarePlan(uid, args.insight, args.carePlanSteps, args.severity);
-          toolResultsPrompts.push(`Tool 'logNewUserInsight' result:\n${JSON.stringify(result)}`);
-        }
-      }
-
-      // 3. Second Pass with Tool Results
-      const feedbackPrompt = `I have executed the requested clinical tools. Here are the live results from GodsCare hospital database:\n\n${toolResultsPrompts.join("\n\n")}\n\nNow, provide your complete, compassionate, and structured clinical consultation and recommendations to ${patientName}. Highlight recommended medicines, specialist doctors, and step-by-step care in clean Markdown.`;
-
-      const { res: followUpRes } = await generateWithFallback(
-        candidateModels,
-        [
-          ...cleanedMessages,
-          { role: "model", parts: [{ text: "Analyzing clinical data and hospital catalog..." }] },
-          { role: "user", parts: [{ text: feedbackPrompt }] }
-        ],
-        {
-          systemInstruction: systemInstruction
-        }
-      );
-
-      finalModelOutput = followUpRes.text || "Your consultation parameters have been processed.";
-    }
-
-    res.json({
-      text: finalModelOutput,
-      thoughts: thoughts,
-      modelUsed: modelUsed,
-      roleUsed: selectedRole
-    });
-
-  } catch (err: any) {
-    console.log("[Clinical AI Agent] Engaging local GodsCare clinical fallback engine.");
-    const fallbackResponse = await generateClinicalFallback(messages, uid, selectedRole);
-    res.json(fallbackResponse);
-  }
-});
+app.post("/api/gemini/agent", handleClinicalConsultation);
+app.post("/api/agent/chat", handleClinicalConsultation);
 
 
 // ==========================================
 // VITE DEV SERVER / PRODUCTION CONFIG
 // ==========================================
-
-// Pre-seeded default doctors list for the clinical ecosystem
-const INITIAL_DOCTORS = [
-  {
-    id: "doc-vance",
-    name: "Dr. Elizabeth Vance",
-    specialty: "Cardiologist",
-    department: "Cardiology",
-    experience: "15 years",
-    education: "M.D. Stanford University School of Medicine",
-    rating: 4.9,
-    availableDays: ["Monday", "Wednesday", "Friday"],
-    availableHours: ["09:00 AM", "10:00 AM", "11:00 AM", "02:00 PM", "03:00 PM"],
-    image: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400",
-    bio: "Dr. Vance is a board-certified cardiologist with a passion for preventive medicine and non-invasive cardiac imaging techniques."
-  },
-  {
-    id: "doc-thorne",
-    name: "Dr. Marcus Thorne",
-    specialty: "Pediatrician",
-    department: "Pediatrics",
-    experience: "10 years",
-    education: "M.D. Johns Hopkins University School of Medicine",
-    rating: 4.8,
-    availableDays: ["Tuesday", "Thursday", "Friday"],
-    availableHours: ["09:00 AM", "10:30 AM", "11:30 AM", "01:30 PM", "02:30 PM", "04:00 PM"],
-    image: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400",
-    bio: "Dedicated to providing compassionate, child-centric care and supporting families through every step of their children's development."
-  },
-  {
-    id: "doc-lin",
-    name: "Dr. Sarah Lin",
-    specialty: "Neurologist",
-    department: "Neurology",
-    experience: "12 years",
-    education: "Ph.D. & M.D. Harvard Medical School",
-    rating: 4.95,
-    availableDays: ["Monday", "Tuesday", "Thursday"],
-    availableHours: ["10:00 AM", "11:00 AM", "02:00 PM", "03:30 PM"],
-    image: "https://images.unsplash.com/photo-1594824813573-246434de83fb?auto=format&fit=crop&q=80&w=400",
-    bio: "Dr. Lin is an expert neuroscientist and neurologist, specializing in neurodegenerative conditions, migraines, and cognitive care."
-  },
-  {
-    id: "doc-carter",
-    name: "Dr. James Carter",
-    specialty: "Orthopedic Surgeon",
-    department: "Orthopedics",
-    experience: "14 years",
-    education: "M.D. Yale School of Medicine",
-    rating: 4.7,
-    availableDays: ["Wednesday", "Thursday", "Friday"],
-    availableHours: ["08:30 AM", "10:00 AM", "11:30 AM", "01:00 PM", "03:00 PM"],
-    image: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=400",
-    bio: "Focuses on sports injuries, advanced arthroscopic joint repairs, and personalized rehabilitation programs for professional athletes and active patients."
-  },
-  {
-    id: "doc-patel",
-    name: "Dr. Chloe Patel",
-    specialty: "Dermatologist",
-    department: "Dermatology",
-    experience: "8 years",
-    education: "M.D. University of Michigan",
-    rating: 4.9,
-    availableDays: ["Monday", "Wednesday", "Thursday"],
-    availableHours: ["09:30 AM", "11:00 AM", "02:00 PM", "03:00 PM", "04:30 PM"],
-    image: "https://images.unsplash.com/photo-1527613426441-4da17471b66d?auto=format&fit=crop&q=80&w=400",
-    bio: "Provides advanced clinical, surgical, and cosmetic dermatology solutions, focusing on acne care, eczema, and skin cancer screening."
-  },
-  {
-    id: "doc-chen",
-    name: "Dr. Robert Chen",
-    specialty: "General Physician",
-    department: "General Medicine",
-    experience: "18 years",
-    education: "M.D. Columbia University Vagelos College of Physicians and Surgeons",
-    rating: 4.85,
-    availableDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-    availableHours: ["09:00 AM", "10:30 AM", "12:00 PM", "02:00 PM", "03:30 PM"],
-    image: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=400",
-    bio: "A trusted family physician specialized in comprehensive diagnostic evaluations, chronic disease management, and long-term vitality counseling."
-  }
-];
 
 // Helper to seed doctors dynamically on startup
 async function seedDoctorsCollection() {
