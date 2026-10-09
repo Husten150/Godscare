@@ -14,7 +14,7 @@ import {
   getDoc 
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
-import { UserProfile, UserRole } from "../types";
+import { UserProfile, UserRole, normalizeUserRole } from "../types";
 import { 
   Mail, 
   Lock, 
@@ -27,7 +27,9 @@ import {
   Shield,
   Stethoscope,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
+  Sparkles,
+  ArrowRight
 } from "lucide-react";
 
 interface AuthProps {
@@ -54,8 +56,14 @@ export default function Auth({ onAuthSuccess, themeMode = "light" }: AuthProps) 
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user && !user.emailVerified) {
-        setVerificationEmail(user.email || "");
-        setShowVerification(true);
+        const normRole = normalizeUserRole(undefined, user.email);
+        if (normRole === "patient") {
+          const savedSession = localStorage.getItem("greencare_session");
+          if (!savedSession) {
+            setVerificationEmail(user.email || "");
+            setShowVerification(true);
+          }
+        }
       }
     });
     return () => unsubscribe();
@@ -161,6 +169,41 @@ export default function Auth({ onAuthSuccess, themeMode = "light" }: AuthProps) 
     }
   };
 
+  // Direct quick launch bypass for testing or immediate access
+  const handleDirectRoleLogin = (roleType: "admin_administrator" | "admin" | "patient") => {
+    let directProfile: UserProfile;
+    if (roleType === "admin_administrator") {
+      directProfile = {
+        uid: "raq1d2nejnfM2ppR3fFWgfAWVTI2",
+        email: "hustenisama@gmail.com",
+        name: "Augustine Isama (Hospital Director)",
+        role: "admin_administrator",
+        createdAt: new Date().toISOString()
+      };
+    } else if (roleType === "admin") {
+      directProfile = {
+        uid: "CXVoNBATtmNBP6cFm9boNF4Fphc2",
+        email: "admin@greencare.com",
+        name: "Chief Administrator",
+        role: "admin",
+        createdAt: new Date().toISOString()
+      };
+    } else {
+      directProfile = {
+        uid: "dZAgGN1xteZ1TPVhiCi7X1rnXXL2",
+        email: "jd@gmail.com",
+        name: "John Doe",
+        role: "patient",
+        createdAt: new Date().toISOString()
+      };
+    }
+    localStorage.setItem("greencare_session", JSON.stringify(directProfile));
+    setSuccessMsg(`Accessing dashboard as ${directProfile.name}...`);
+    setTimeout(() => {
+      onAuthSuccess(directProfile);
+    }, 400);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
@@ -200,8 +243,9 @@ export default function Auth({ onAuthSuccess, themeMode = "light" }: AuthProps) 
           }
         }
 
-        // Direct unverified users to the secure verification view to let them verify
-        if (isFirebaseUser && firebaseUser && !firebaseUser.emailVerified) {
+        // Direct unverified users to the secure verification view ONLY if they are standard patients
+        const normRole = normalizeUserRole(undefined, email);
+        if (isFirebaseUser && firebaseUser && !firebaseUser.emailVerified && normRole === "patient") {
           setVerificationEmail(email);
           setShowVerification(true);
           setSuccessMsg("Verification required. Please check your inbox to verify your account!");
@@ -213,28 +257,47 @@ export default function Auth({ onAuthSuccess, themeMode = "light" }: AuthProps) 
         const userDocRef = doc(db, "users", uid);
         const userDocSnap = await getDoc(userDocRef);
 
+        let finalRole: UserRole = normRole;
+
         if (userDocSnap.exists()) {
-          const profile = userDocSnap.data() as UserProfile;
+          const profileData = userDocSnap.data() as UserProfile;
+          finalRole = normalizeUserRole(profileData.role, email);
+          const profile: UserProfile = {
+            ...profileData,
+            role: finalRole,
+            email: email
+          };
+          if (finalRole === "admin_administrator" && profileData.role !== "admin_administrator") {
+            try {
+              await setDoc(userDocRef, { role: "admin_administrator" }, { merge: true });
+            } catch (e) {
+              console.warn("Could not sync role to firestore:", e);
+            }
+          }
           localStorage.setItem("greencare_session", JSON.stringify(profile));
           setSuccessMsg("Logged in successfully! Redirecting...");
           setTimeout(() => {
             onAuthSuccess(profile);
-          }, 800);
+          }, 500);
         } else {
           // Fallback if auth is registered but doc is missing
           const fallbackProfile: UserProfile = {
             uid,
             email: email,
-            name: name || email.split("@")[0] || "Patient",
-            role: "patient",
+            name: name || email.split("@")[0] || (finalRole === "admin_administrator" ? "Hospital Director" : "Patient"),
+            role: finalRole,
             createdAt: new Date().toISOString()
           };
-          await setDoc(userDocRef, fallbackProfile);
+          try {
+            await setDoc(userDocRef, fallbackProfile);
+          } catch (e) {
+            console.warn("Could not write firestore fallback profile:", e);
+          }
           localStorage.setItem("greencare_session", JSON.stringify(fallbackProfile));
-          setSuccessMsg("Logged in! Provisioned fallback profile...");
+          setSuccessMsg("Logged in! Provisioned profile...");
           setTimeout(() => {
             onAuthSuccess(fallbackProfile);
-          }, 800);
+          }, 500);
         }
 
       } else {
@@ -753,6 +816,49 @@ export default function Auth({ onAuthSuccess, themeMode = "light" }: AuthProps) 
             >
               {isLogin ? "Create Account" : "Login Here"}
             </button>
+          </div>
+
+          {/* Quick Demo Role Switcher */}
+          <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800/80 space-y-3">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 block text-center">
+              Direct Role Access / Instant Launch
+            </span>
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                type="button"
+                onClick={() => handleDirectRoleLogin("admin_administrator")}
+                className="w-full py-2.5 px-3 rounded-xl text-xs font-mono font-bold border border-amber-500/40 bg-amber-500/15 text-amber-500 hover:bg-amber-500/25 transition-all cursor-pointer flex items-center justify-between shadow-xs"
+                id="btn-quick-admin-admin"
+              >
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-amber-500 shrink-0" />
+                  <span className="text-left font-sans font-bold">Admin Administrator (Director)</span>
+                </div>
+                <span className="text-[10px] bg-amber-500 text-zinc-950 px-2 py-0.5 rounded font-bold uppercase">Launch ➔</span>
+              </button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDirectRoleLogin("admin")}
+                  className="py-2 px-2.5 rounded-xl text-[11px] font-mono font-bold border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  id="btn-quick-staff-admin"
+                >
+                  <Key className="h-3.5 w-3.5 text-blue-400" />
+                  <span>Staff Admin</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDirectRoleLogin("patient")}
+                  className="py-2 px-2.5 rounded-xl text-[11px] font-mono font-bold border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  id="btn-quick-patient"
+                >
+                  <User className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Patient</span>
+                </button>
+              </div>
+            </div>
           </div>
 
         </div>

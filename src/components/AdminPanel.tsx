@@ -1236,14 +1236,10 @@ export default function AdminPanel({ themeMode = "light" }: AdminPanelProps = {}
                     />
                   </div>
 
-                  <button
-                    onClick={triggerAddDoctor}
-                    className="w-full sm:w-auto px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all flex items-center justify-center space-x-1"
-                    id="add-doctor-admin-btn"
-                  >
-                    <PlusCircle className="h-3.5 w-3.5 text-emerald-400" />
-                    <span>Register New Doctor</span>
-                  </button>
+                  <div className="px-3 py-2 bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 rounded-lg text-xs font-mono font-bold flex items-center gap-2">
+                    <Shield className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                    <span>Doctor modifications & pricing reserved for Admin Administrator</span>
+                  </div>
                 </div>
 
                 {/* Table lists */}

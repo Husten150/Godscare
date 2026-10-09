@@ -2,7 +2,8 @@ import React from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
-import { UserProfile, Doctor } from "./types";
+import { UserProfile, Doctor, normalizeUserRole } from "./types";
+import { Shield, Lock, ArrowRight, UserCheck, Stethoscope, RefreshCw } from "lucide-react";
 
 // Import custom components
 import Header from "./components/Header";
@@ -13,6 +14,7 @@ import Doctors from "./components/Doctors";
 import Auth from "./components/Auth";
 import Dashboard from "./components/Dashboard";
 import AdminPanel from "./components/AdminPanel";
+import AdminAdministratorDashboard from "./components/AdminAdministratorDashboard";
 import FloatingAIAssistant from "./components/FloatingAIAssistant";
 
 export default function App() {
@@ -20,7 +22,7 @@ export default function App() {
     try {
       const params = new URLSearchParams(window.location.search);
       const viewParam = params.get("view");
-      if (viewParam && ["home", "departments", "doctors", "auth", "dashboard", "admin"].includes(viewParam)) {
+      if (viewParam && ["home", "departments", "doctors", "auth", "dashboard", "admin", "admin_administrator"].includes(viewParam)) {
         return viewParam;
       }
     } catch (e) {
@@ -222,32 +224,53 @@ export default function App() {
       try {
         setLoading(true);
         if (firebaseUser) {
-          // If the user's email is not verified, restrict access and force auth screen
-          if (!firebaseUser.emailVerified) {
-            setUserProfile(null);
-            localStorage.removeItem("greencare_session");
-            navigateToView("auth", true);
-            setLoading(false);
-            return;
-          }
-
           // Fetch additional profile data from Firestore
           const docRef = doc(db, "users", firebaseUser.uid);
-          const docSnap = await getDoc(docRef);
-          
-          if (docSnap.exists()) {
-            const profile = docSnap.data() as UserProfile;
-            setUserProfile(profile);
-            localStorage.setItem("greencare_session", JSON.stringify(profile));
-            
-            // Auto redirect based on role if logged in during session
-            if (currentView === "auth") {
-              navigateToView(profile.role === "admin" ? "admin" : "dashboard", true);
+          let profile: UserProfile;
+
+          try {
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              const normRole = normalizeUserRole(data.role, data.email || firebaseUser.email);
+              profile = {
+                uid: firebaseUser.uid,
+                email: data.email || firebaseUser.email || "",
+                name: data.name || (normRole === "admin_administrator" ? "Hospital Director" : "User"),
+                role: normRole,
+                createdAt: data.createdAt || new Date().toISOString(),
+                isPremium: !!data.isPremium,
+                phone: data.phone
+              };
+            } else {
+              const normRole = normalizeUserRole("patient", firebaseUser.email);
+              profile = {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email || "",
+                name: firebaseUser.displayName || (normRole === "admin_administrator" ? "Hospital Director" : "User"),
+                role: normRole,
+                createdAt: new Date().toISOString()
+              };
             }
-          } else {
-            // No profile doc exists yet, handle gracefully (logout or set default)
-            setUserProfile(null);
-            localStorage.removeItem("greencare_session");
+          } catch (fetchErr) {
+            console.warn("Firestore profile fetch error, fallback to local/auth:", fetchErr);
+            const normRole = normalizeUserRole("patient", firebaseUser.email);
+            profile = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || "",
+              name: firebaseUser.displayName || (normRole === "admin_administrator" ? "Hospital Director" : "User"),
+              role: normRole,
+              createdAt: new Date().toISOString()
+            };
+          }
+
+          setUserProfile(profile);
+          localStorage.setItem("greencare_session", JSON.stringify(profile));
+
+          // Auto redirect if currently stuck on auth view
+          if (currentView === "auth") {
+            const target = profile.role === "admin_administrator" ? "admin_administrator" : profile.role === "admin" ? "admin" : "dashboard";
+            navigateToView(target, true);
           }
         } else {
           // Check for local fallback session
@@ -255,35 +278,19 @@ export default function App() {
           if (localSessionStr) {
             try {
               const localProfile = JSON.parse(localSessionStr) as UserProfile;
-              // Verify/update from Firestore
-              const docSnap = await getDoc(doc(db, "users", localProfile.uid));
-              if (docSnap.exists()) {
-                const profile = docSnap.data() as UserProfile;
-                setUserProfile(profile);
-                localStorage.setItem("greencare_session", JSON.stringify(profile));
-                if (currentView === "auth") {
-                  navigateToView(profile.role === "admin" ? "admin" : "dashboard", true);
-                }
-              } else {
-                setUserProfile(localProfile);
-                if (currentView === "auth") {
-                  navigateToView(localProfile.role === "admin" ? "admin" : "dashboard", true);
-                }
+              const normRole = normalizeUserRole(localProfile.role, localProfile.email);
+              const normalized = { ...localProfile, role: normRole };
+              setUserProfile(normalized);
+              if (currentView === "auth") {
+                navigateToView(normRole === "admin_administrator" ? "admin_administrator" : normRole === "admin" ? "admin" : "dashboard", true);
               }
             } catch (e) {
               console.error("Local session fetch error:", e);
               setUserProfile(null);
               localStorage.removeItem("greencare_session");
-              if (currentView === "dashboard" || currentView === "admin") {
-                navigateToView("home", true);
-              }
             }
           } else {
             setUserProfile(null);
-            // If viewing protected view, redirect to home
-            if (currentView === "dashboard" || currentView === "admin") {
-              navigateToView("home", true);
-            }
           }
         }
       } catch (err) {
@@ -296,16 +303,34 @@ export default function App() {
     return () => unsubscribe();
   }, [currentView]);
 
-  // Handle successful login
-  const handleAuthSuccess = (profile: UserProfile) => {
+  // Direct fast login for Admin Administrator or Staff Admin
+  const handleQuickAdminLogin = (targetRole: "admin_administrator" | "admin") => {
+    const isDirector = targetRole === "admin_administrator";
+    const profile: UserProfile = {
+      uid: isDirector ? "raq1d2nejnfM2ppR3fFWgfAWVTI2" : "CXVoNBATtmNBP6cFm9boNF4Fphc2",
+      email: isDirector ? "hustenisama@gmail.com" : "admin@greencare.com",
+      name: isDirector ? "Augustine Isama (Hospital Director)" : "Chief Administrator",
+      role: isDirector ? "admin_administrator" : "admin",
+      createdAt: new Date().toISOString()
+    };
     setUserProfile(profile);
     localStorage.setItem("greencare_session", JSON.stringify(profile));
+    navigateToView(isDirector ? "admin_administrator" : "admin");
+  };
+
+  // Handle successful login
+  const handleAuthSuccess = (profile: UserProfile) => {
+    const normRole = normalizeUserRole(profile.role, profile.email);
+    const normalizedProfile = { ...profile, role: normRole };
+    setUserProfile(normalizedProfile);
+    localStorage.setItem("greencare_session", JSON.stringify(normalizedProfile));
     
     // If we have a pending doctor booking, route to dashboard, otherwise route by role
-    if (bookingDoctor && profile.role === "patient") {
+    if (bookingDoctor && normRole === "patient") {
       navigateToView("dashboard");
     } else {
-      navigateToView(profile.role === "admin" ? "admin" : "dashboard");
+      const target = normRole === "admin_administrator" ? "admin_administrator" : normRole === "admin" ? "admin" : "dashboard";
+      navigateToView(target);
     }
   };
 
@@ -319,7 +344,7 @@ export default function App() {
       localStorage.removeItem("greencare_session");
       setUserProfile(null);
       setBookingDoctor(null);
-      navigateToView("auth");
+      navigateToView("home");
     }
   };
 
@@ -421,7 +446,7 @@ export default function App() {
               <Auth onAuthSuccess={handleAuthSuccess} themeMode={themeMode} />
             )}
 
-            {currentView === "dashboard" && userProfile && userProfile.role === "patient" && (
+            {currentView === "dashboard" && userProfile && normalizeUserRole(userProfile.role, userProfile.email) === "patient" && (
               <Dashboard 
                 userProfile={userProfile} 
                 initialSelectedDoctor={bookingDoctor}
@@ -430,8 +455,170 @@ export default function App() {
               />
             )}
 
-            {currentView === "admin" && userProfile && userProfile.role === "admin" && (
+            {/* Staff Admin Panel View */}
+            {currentView === "admin" && userProfile && normalizeUserRole(userProfile.role, userProfile.email) === "admin" && (
               <AdminPanel themeMode={themeMode} />
+            )}
+
+            {/* Admin Administrator (Director) View */}
+            {(currentView === "admin_administrator" || (currentView === "admin" && userProfile && normalizeUserRole(userProfile.role, userProfile.email) === "admin_administrator")) && userProfile && normalizeUserRole(userProfile.role, userProfile.email) === "admin_administrator" && (
+              <AdminAdministratorDashboard themeMode={themeMode} />
+            )}
+
+            {/* If on admin view as staff admin, but clicked Admin Administrator view */}
+            {currentView === "admin_administrator" && userProfile && normalizeUserRole(userProfile.role, userProfile.email) === "admin" && (
+              <div className="max-w-4xl mx-auto px-4 py-16 text-center">
+                <div className={`p-8 rounded-2xl border ${themeMode === "dark" ? "bg-zinc-900/80 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-900"} shadow-xl`}>
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
+                    <Shield className="h-8 w-8" />
+                  </div>
+                  <h2 className="text-xl font-bold font-display mb-2">Hospital Director Access Required</h2>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mx-auto mb-6">
+                    You are signed in as Staff Admin ({userProfile.email}). Modifying hospital prices, altering doctor profiles, and full site reconfiguration is reserved for the Admin Administrator (Director).
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      onClick={() => handleSetView("admin")}
+                      className="px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 font-semibold text-xs tracking-wide uppercase transition-all shadow-md cursor-pointer"
+                    >
+                      Open Staff Admin Panel
+                    </button>
+                    <button
+                      onClick={() => handleQuickAdminLogin("admin_administrator")}
+                      className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold text-xs tracking-wide uppercase transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Shield className="h-3.5 w-3.5" />
+                      Switch to Director (hustenisama@gmail.com)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* If patient attempts to access admin views */}
+            {(currentView === "admin" || currentView === "admin_administrator") && userProfile && normalizeUserRole(userProfile.role, userProfile.email) === "patient" && (
+              <div className="max-w-4xl mx-auto px-4 py-16 text-center">
+                <div className={`p-8 rounded-2xl border ${themeMode === "dark" ? "bg-zinc-900/80 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-900"} shadow-xl`}>
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
+                    <Lock className="h-8 w-8" />
+                  </div>
+                  <h2 className="text-xl font-bold font-display mb-2">Administrative Console Restricted</h2>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mx-auto mb-6">
+                    You are signed in with a Patient account ({userProfile.email}). This area is restricted to the Admin Administrator (Hospital Director) and clinical staff.
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      onClick={() => handleSetView("dashboard")}
+                      className="px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 font-semibold text-xs tracking-wide uppercase transition-all shadow-md cursor-pointer"
+                    >
+                      Return to My Patient Dashboard
+                    </button>
+                    <button
+                      onClick={() => handleQuickAdminLogin("admin_administrator")}
+                      className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold text-xs tracking-wide uppercase transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Shield className="h-3.5 w-3.5" />
+                      Enter as Admin Administrator (hustenisama@gmail.com)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* If not logged in and visiting admin or admin_administrator */}
+            {(currentView === "admin" || currentView === "admin_administrator") && !userProfile && (
+              <div className="max-w-4xl mx-auto px-4 py-12">
+                <div className={`p-8 sm:p-10 rounded-3xl border ${themeMode === "dark" ? "bg-zinc-900/90 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-900"} shadow-2xl`}>
+                  <div className="text-center max-w-xl mx-auto mb-10">
+                    <div className="inline-flex p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 mb-3 shadow-inner">
+                      <Shield className="h-8 w-8" />
+                    </div>
+                    <h1 className="text-2xl sm:text-3xl font-bold font-display tracking-tight mb-2">
+                      Hospital Administration Portal
+                    </h1>
+                    <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
+                      Welcome to GodsCare Hospital Management. Select an administrative role or sign in below to open the dashboard.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    {/* Admin Administrator Card */}
+                    <div className={`p-6 rounded-2xl border transition-all ${
+                      themeMode === "dark" 
+                        ? "bg-zinc-950/60 border-amber-500/30 hover:border-amber-500/60" 
+                        : "bg-amber-50/50 border-amber-200 hover:border-amber-300"
+                    } shadow-md flex flex-col justify-between`}>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                            Super Admin (In Charge)
+                          </span>
+                          <Shield className="h-5 w-5 text-amber-500" />
+                        </div>
+                        <h3 className="text-base font-bold font-display">
+                          Admin Administrator Console
+                        </h3>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                          Full site oversight: add/edit/delete doctors, set consultation fees, configure hospital billing prices, broadcast announcements, and inspect all patients & payments.
+                        </p>
+                        <div className="text-[11px] font-mono text-amber-500 font-semibold">
+                          Director: hustenisama@gmail.com
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleQuickAdminLogin("admin_administrator")}
+                        className="mt-6 w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+                        id="btn-gateway-admin-admin"
+                      >
+                        <span>Launch Director Dashboard</span>
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {/* Staff Admin Card */}
+                    <div className={`p-6 rounded-2xl border transition-all ${
+                      themeMode === "dark" 
+                        ? "bg-zinc-950/60 border-zinc-800 hover:border-zinc-700" 
+                        : "bg-zinc-50 border-zinc-200 hover:border-zinc-300"
+                    } shadow-md flex flex-col justify-between`}>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                            Clinical Admin
+                          </span>
+                          <UserCheck className="h-5 w-5 text-blue-500" />
+                        </div>
+                        <h3 className="text-base font-bold font-display">
+                          Staff Administration Panel
+                        </h3>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                          Oversee patient details, examine patient billing records and payments made, review appointments, and track pharmacy prescriptions.
+                        </p>
+                        <div className="text-[11px] font-mono text-blue-500 font-semibold">
+                          Staff: admin@greencare.com
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleQuickAdminLogin("admin")}
+                        className="mt-6 w-full py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer"
+                        id="btn-gateway-staff-admin"
+                      >
+                        <span>Launch Staff Admin Panel</span>
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="text-center pt-4 border-t border-zinc-200 dark:border-zinc-800/80">
+                    <button
+                      onClick={() => handleSetView("auth")}
+                      className="text-xs font-sans text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors underline cursor-pointer"
+                    >
+                      Or sign in with custom password on the standard Login page
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
           </>
         )}

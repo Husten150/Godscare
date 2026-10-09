@@ -75,6 +75,22 @@ export default function Footer({ setCurrentView, themeMode = "light" }: FooterPr
                   Patient Portal Login
                 </button>
               </li>
+              <li>
+                <button 
+                  onClick={() => setCurrentView("admin_administrator")}
+                  className={`transition-colors cursor-pointer text-left font-medium ${isDark ? "text-amber-400/90 hover:text-amber-300" : "text-amber-700 hover:text-amber-900"}`}
+                >
+                  Admin Administrator Console
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => setCurrentView("admin")}
+                  className={`transition-colors cursor-pointer text-left ${isDark ? "text-zinc-400 hover:text-white" : "text-zinc-500 hover:text-zinc-900"}`}
+                >
+                  Staff Admin Panel
+                </button>
+              </li>
             </ul>
           </div>
 

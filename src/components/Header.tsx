@@ -1,6 +1,6 @@
 import React from "react";
 import { Stethoscope, User, LogIn, LogOut, Menu, X, Shield, LayoutDashboard, Sun, Moon, Monitor } from "lucide-react";
-import { UserProfile } from "../types";
+import { UserProfile, normalizeUserRole } from "../types";
 
 interface HeaderProps {
   currentView: string;
@@ -24,6 +24,8 @@ export default function Header({
   onToggleTheme 
 }: HeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+
+  const normalizedRole = userProfile ? normalizeUserRole(userProfile.role, userProfile.email) : null;
 
   const navItems = [
     { id: "home", label: "Home" },
@@ -77,9 +79,9 @@ export default function Header({
               </button>
             ))}
 
-            {userProfile && (
+            {userProfile ? (
               <>
-                {userProfile.role === "patient" && (
+                {normalizedRole === "patient" && (
                   <button
                     onClick={() => handleNavClick("dashboard")}
                     className={`font-sans font-medium text-xs tracking-wide uppercase transition-colors flex items-center space-x-1 cursor-pointer ${
@@ -93,7 +95,21 @@ export default function Header({
                     <span>My Dashboard</span>
                   </button>
                 )}
-                {userProfile.role === "admin" && (
+                {normalizedRole === "admin_administrator" && (
+                  <button
+                    onClick={() => handleNavClick("admin_administrator")}
+                    className={`font-sans font-medium text-xs tracking-wide uppercase transition-colors flex items-center space-x-1.5 cursor-pointer px-2.5 py-1 rounded-md border ${
+                      currentView === "admin_administrator" || currentView === "admin"
+                        ? isDark ? "text-amber-300 border-amber-500/50 bg-amber-500/20 font-bold" : "text-amber-900 border-amber-400 bg-amber-100 font-semibold"
+                        : isDark ? "text-amber-400/90 border-amber-500/30 hover:bg-amber-500/10" : "text-amber-800 border-amber-300 hover:bg-amber-50"
+                    }`}
+                    id="nav-admin-administrator"
+                  >
+                    <Shield className="h-3.5 w-3.5 text-amber-400" />
+                    <span>Admin Administrator Console</span>
+                  </button>
+                )}
+                {normalizedRole === "admin" && (
                   <button
                     onClick={() => handleNavClick("admin")}
                     className={`font-sans font-medium text-xs tracking-wide uppercase transition-colors flex items-center space-x-1 cursor-pointer ${
@@ -104,10 +120,23 @@ export default function Header({
                     id="nav-admin"
                   >
                     <Shield className="h-3.5 w-3.5" />
-                    <span>Admin Panel</span>
+                    <span>Staff Admin Panel</span>
                   </button>
                 )}
               </>
+            ) : (
+              <button
+                onClick={() => handleNavClick("admin_administrator")}
+                className={`font-sans font-medium text-xs tracking-wide uppercase transition-colors flex items-center space-x-1.5 cursor-pointer px-2.5 py-1 rounded-md border ${
+                  currentView === "admin_administrator" || currentView === "admin"
+                    ? isDark ? "text-amber-300 border-amber-500/50 bg-amber-500/20 font-bold" : "text-amber-900 border-amber-400 bg-amber-100 font-semibold"
+                    : isDark ? "text-amber-400/90 border-amber-500/30 hover:bg-amber-500/10" : "text-amber-800 border-amber-300 hover:bg-amber-50"
+                }`}
+                id="nav-admin-portal-link"
+              >
+                <Shield className="h-3.5 w-3.5 text-amber-400" />
+                <span>Admin Portal</span>
+              </button>
             )}
           </nav>
 
@@ -205,7 +234,7 @@ export default function Header({
               <div className="flex items-center space-x-3">
                 {/* Clickable Username / Profile Badge */}
                 <button
-                  onClick={() => handleNavClick(userProfile.role === "admin" ? "admin" : "dashboard")}
+                  onClick={() => handleNavClick(normalizedRole === "admin_administrator" ? "admin_administrator" : normalizedRole === "admin" ? "admin" : "dashboard")}
                   title="Click to view your profile & dashboard"
                   className={`flex items-center space-x-2 text-xs p-1.5 rounded-xl transition-all cursor-pointer border group ${
                     isDark 
@@ -215,17 +244,23 @@ export default function Header({
                   id="btn-user-profile-header"
                 >
                   <div className={`h-7 w-7 rounded-full flex items-center justify-center font-bold uppercase border transition-colors ${
-                    isDark ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 group-hover:bg-emerald-500 group-hover:text-zinc-950" : "bg-emerald-100 text-emerald-800 border-emerald-200 group-hover:bg-zinc-900 group-hover:text-white"
+                    normalizedRole === "admin_administrator"
+                      ? isDark ? "bg-amber-500/20 text-amber-400 border-amber-500/40" : "bg-amber-100 text-amber-800 border-amber-300"
+                      : isDark ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 group-hover:bg-emerald-500 group-hover:text-zinc-950" : "bg-emerald-100 text-emerald-800 border-emerald-200 group-hover:bg-zinc-900 group-hover:text-white"
                   }`}>
                     {userProfile.name.charAt(0)}
                   </div>
                   <span className="font-bold max-w-[120px] truncate underline-offset-2 group-hover:underline" title={userProfile.name}>
                     {userProfile.name}
                   </span>
-                  <span className={`text-[9px] font-mono px-2 py-0.5 font-medium rounded-full border uppercase tracking-wider ${
-                    isDark ? "bg-zinc-800 text-zinc-300 border-zinc-700" : "bg-zinc-200 text-zinc-700 border-zinc-300"
+                  <span className={`text-[9px] font-mono px-2 py-0.5 font-bold rounded-full border uppercase tracking-wider ${
+                    normalizedRole === "admin_administrator"
+                      ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
+                      : normalizedRole === "admin"
+                      ? "bg-blue-500/20 text-blue-400 border-blue-500/40"
+                      : isDark ? "bg-zinc-800 text-zinc-300 border-zinc-700" : "bg-zinc-200 text-zinc-700 border-zinc-300"
                   }`}>
-                    {userProfile.role}
+                    {normalizedRole === "admin_administrator" ? "Director Admin" : normalizedRole === "admin" ? "Staff Admin" : "Patient"}
                   </span>
                   {userProfile.isPremium && (
                     <span className="text-[9px] font-mono px-2 py-0.5 bg-amber-500 text-white font-bold rounded-full border border-amber-400 uppercase tracking-wider flex items-center gap-0.5 shadow-xs">
@@ -358,9 +393,9 @@ export default function Header({
             </button>
           ))}
 
-          {userProfile && (
+          {userProfile ? (
             <>
-              {userProfile.role === "patient" && (
+              {normalizedRole === "patient" && (
                 <button
                   onClick={() => handleNavClick("dashboard")}
                   className={`block w-full text-left px-3 py-2 rounded-md font-sans font-medium text-sm cursor-pointer ${
@@ -372,7 +407,19 @@ export default function Header({
                   My Dashboard
                 </button>
               )}
-              {userProfile.role === "admin" && (
+              {normalizedRole === "admin_administrator" && (
+                <button
+                  onClick={() => handleNavClick("admin_administrator")}
+                  className={`block w-full text-left px-3 py-2 rounded-md font-sans font-medium text-sm cursor-pointer ${
+                    currentView === "admin_administrator" || currentView === "admin"
+                      ? isDark ? "bg-amber-950/60 text-amber-300 font-bold border border-amber-500/30" : "bg-amber-100 text-amber-900 font-semibold border border-amber-300"
+                      : isDark ? "text-amber-400/90 hover:bg-zinc-900" : "text-amber-800 hover:bg-zinc-50/50 hover:text-amber-900"
+                  }`}
+                >
+                  Admin Administrator Console
+                </button>
+              )}
+              {normalizedRole === "admin" && (
                 <button
                   onClick={() => handleNavClick("admin")}
                   className={`block w-full text-left px-3 py-2 rounded-md font-sans font-medium text-sm cursor-pointer ${
@@ -381,10 +428,21 @@ export default function Header({
                       : isDark ? "text-zinc-300 hover:bg-zinc-900" : "text-zinc-600 hover:bg-zinc-50/50 hover:text-zinc-900"
                   }`}
                 >
-                  Admin Panel
+                  Staff Admin Panel
                 </button>
               )}
             </>
+          ) : (
+            <button
+              onClick={() => handleNavClick("admin_administrator")}
+              className={`block w-full text-left px-3 py-2 rounded-md font-sans font-medium text-sm cursor-pointer ${
+                currentView === "admin_administrator" || currentView === "admin"
+                  ? isDark ? "bg-amber-950/60 text-amber-300 font-bold border border-amber-500/30" : "bg-amber-100 text-amber-900 font-semibold border border-amber-300"
+                  : isDark ? "text-amber-400 hover:bg-zinc-900" : "text-amber-800 hover:bg-zinc-50/50 hover:text-amber-900"
+              }`}
+            >
+              Admin Portal
+            </button>
           )}
 
           <div className={`border-t pt-3 ${isDark ? "border-zinc-800" : "border-zinc-100"}`}>
@@ -392,7 +450,7 @@ export default function Header({
               <div className="space-y-3 px-3">
                 <div 
                   onClick={() => {
-                    handleNavClick(userProfile.role === "admin" ? "admin" : "dashboard");
+                    handleNavClick(normalizedRole === "admin_administrator" ? "admin_administrator" : normalizedRole === "admin" ? "admin" : "dashboard");
                     setIsMobileMenuOpen(false);
                   }}
                   className={`flex items-center space-x-3 text-xs p-2.5 rounded-xl border transition-all cursor-pointer ${

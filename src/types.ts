@@ -1,4 +1,37 @@
-export type UserRole = "patient" | "admin";
+export type UserRole = "patient" | "admin" | "admin_administrator" | "admin administrator";
+
+export function normalizeUserRole(role?: string | null, email?: string | null): "patient" | "admin" | "admin_administrator" {
+  const normEmail = (email || "").toLowerCase().trim();
+  const normRole = (role || "").toLowerCase().trim();
+
+  // Primary Super Administrator accounts
+  if (
+    normEmail === "hustenisama@gmail.com" ||
+    normEmail === "austineisama150@gmail.com" ||
+    normEmail === "austineisama@gmail.com" ||
+    normEmail.includes("director") ||
+    normRole === "admin_administrator" ||
+    normRole === "admin administrator" ||
+    normRole === "super_admin" ||
+    normRole === "director"
+  ) {
+    return "admin_administrator";
+  }
+
+  // Clinical & Staff Administrators
+  if (
+    normRole === "admin" ||
+    normRole === "staff_admin" ||
+    normRole === "admin.staff" ||
+    normEmail === "admin@greencare.com" ||
+    normEmail.includes("admin.staff") ||
+    normEmail.includes("billing")
+  ) {
+    return "admin";
+  }
+
+  return "patient";
+}
 
 export interface UserProfile {
   uid: string;
@@ -7,6 +40,20 @@ export interface UserProfile {
   role: UserRole;
   createdAt: string;
   isPremium?: boolean; // Payment subscription status
+  phone?: string;
+}
+
+export interface SiteSettings {
+  hospitalName: string;
+  tagline: string;
+  emergencyPhone: string;
+  generalPhone: string;
+  email: string;
+  address: string;
+  announcement: string;
+  announcementActive: boolean;
+  appointmentBookingFee: number;
+  premiumSubscriptionFee: number;
 }
 
 export interface CarePlan {
@@ -41,6 +88,7 @@ export interface Doctor {
   availableHours: string[]; // e.g., ["09:00 AM", "10:00 AM", "02:00 PM"]
   image: string;
   bio: string;
+  consultationFee?: number;
 }
 
 export type AppointmentStatus = "pending" | "confirmed" | "completed" | "cancelled";

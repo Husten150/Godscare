@@ -1518,6 +1518,255 @@ app.get("/api/settings/fees", async (req: express.Request, res: express.Response
   }
 });
 
+// Get comprehensive site settings (Hospital profile, emergency contact, banner, pricing)
+app.get("/api/site/settings", async (req: express.Request, res: express.Response) => {
+  try {
+    const docRef = doc(db, "system_settings", "site_profile");
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      res.json(snap.data());
+    } else {
+      const defaultSettings = {
+        hospitalName: "GodsCare Hospital & Medical Center",
+        tagline: "World-Class Compassionate Healthcare & Advanced Clinical Excellence",
+        emergencyPhone: "+1 (800) 463-7227",
+        generalPhone: "+1 (800) 555-0199",
+        email: "care@godscarehospital.com",
+        address: "742 Evergreen Healthcare Blvd, Medical District",
+        announcement: "Notice: 24/7 Outpatient & Emergency services are fully operational. Book consultations online.",
+        announcementActive: true,
+        appointmentBookingFee: 3500,
+        premiumSubscriptionFee: 500
+      };
+      if (db) await setDoc(docRef, defaultSettings);
+      res.json(defaultSettings);
+    }
+  } catch (error) {
+    res.json({
+      hospitalName: "GodsCare Hospital & Medical Center",
+      tagline: "World-Class Compassionate Healthcare & Advanced Clinical Excellence",
+      emergencyPhone: "+1 (800) 463-7227",
+      generalPhone: "+1 (800) 555-0199",
+      email: "care@godscarehospital.com",
+      address: "742 Evergreen Healthcare Blvd, Medical District",
+      announcement: "Notice: 24/7 Outpatient & Emergency services are fully operational.",
+      announcementActive: true,
+      appointmentBookingFee: 3500,
+      premiumSubscriptionFee: 500
+    });
+  }
+});
+
+// Update comprehensive site settings (Admin Administrator only)
+app.post("/api/site/settings/update", async (req: express.Request, res: express.Response) => {
+  try {
+    if (!db) {
+      res.status(500).json({ error: "Database not initialized" });
+      return;
+    }
+    const updateData = req.body;
+    const docRef = doc(db, "system_settings", "site_profile");
+    await setDoc(docRef, updateData, { merge: true });
+
+    // Also sync fees document
+    if (updateData.appointmentBookingFee || updateData.premiumSubscriptionFee) {
+      const feesRef = doc(db, "system_settings", "fees");
+      await setDoc(feesRef, {
+        appointmentBookingFee: Number(updateData.appointmentBookingFee || 3500),
+        premiumSubscriptionFee: Number(updateData.premiumSubscriptionFee || 500)
+      }, { merge: true });
+    }
+
+    res.json({ success: true, message: "Site settings updated successfully." });
+  } catch (error: any) {
+    console.error("Error updating site settings:", error);
+    res.status(500).json({ error: error.message || "Failed to update site settings." });
+  }
+});
+
+// Add new doctor (Admin Administrator)
+app.post("/api/doctors/add", async (req: express.Request, res: express.Response) => {
+  try {
+    if (!db) {
+      res.status(500).json({ error: "Database not initialized" });
+      return;
+    }
+    const { name, specialty, department, experience, education, rating, bio, image, availableDays, availableHours, consultationFee } = req.body;
+    if (!name || !specialty || !department) {
+      res.status(400).json({ error: "Missing required doctor fields: name, specialty, department." });
+      return;
+    }
+    const id = `doc-${Date.now()}`;
+    const newDoctor = {
+      id,
+      name,
+      specialty,
+      department,
+      experience: experience || "5+ years",
+      education: education || "M.D. Board Certified",
+      rating: Number(rating) || 5.0,
+      bio: bio || "Experienced medical specialist dedicated to patient well-being.",
+      image: image || "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400",
+      availableDays: Array.isArray(availableDays) ? availableDays : ["Monday", "Wednesday", "Friday"],
+      availableHours: Array.isArray(availableHours) ? availableHours : ["09:00 AM", "11:00 AM", "02:00 PM"],
+      consultationFee: consultationFee ? Number(consultationFee) : 3500
+    };
+    await setDoc(doc(db, "doctors", id), newDoctor);
+    res.json({ success: true, message: "Doctor added successfully.", doctor: newDoctor });
+  } catch (error: any) {
+    console.error("Error adding doctor:", error);
+    res.status(500).json({ error: error.message || "Failed to add doctor." });
+  }
+});
+
+// Update doctor (Admin Administrator)
+app.post("/api/doctors/:id/update", async (req: express.Request, res: express.Response) => {
+  try {
+    if (!db) {
+      res.status(500).json({ error: "Database not initialized" });
+      return;
+    }
+    const { id } = req.params;
+    const docRef = doc(db, "doctors", id);
+    await setDoc(docRef, req.body, { merge: true });
+    res.json({ success: true, message: "Doctor updated successfully." });
+  } catch (error: any) {
+    console.error("Error updating doctor:", error);
+    res.status(500).json({ error: error.message || "Failed to update doctor." });
+  }
+});
+
+// Delete doctor (Admin Administrator)
+app.delete("/api/doctors/:id", async (req: express.Request, res: express.Response) => {
+  try {
+    if (!db) {
+      res.status(500).json({ error: "Database not initialized" });
+      return;
+    }
+    const { id } = req.params;
+    const { deleteDoc } = await import("firebase/firestore");
+    await deleteDoc(doc(db, "doctors", id));
+    res.json({ success: true, message: "Doctor removed successfully." });
+  } catch (error: any) {
+    console.error("Error deleting doctor:", error);
+    res.status(500).json({ error: error.message || "Failed to delete doctor." });
+  }
+});
+
+// Delete medicine from catalog (Admin Administrator)
+app.post("/api/medicines/:id/delete", async (req: express.Request, res: express.Response) => {
+  try {
+    if (!db) {
+      res.status(500).json({ error: "Database not initialized" });
+      return;
+    }
+    const { id } = req.params;
+    const { deleteDoc } = await import("firebase/firestore");
+    await deleteDoc(doc(db, "medicines", id));
+    res.json({ success: true, message: "Medicine removed from catalog." });
+  } catch (error: any) {
+    console.error("Error deleting medicine:", error);
+    res.status(500).json({ error: error.message || "Failed to delete medicine." });
+  }
+});
+
+// Update user role (Admin Administrator only)
+app.post("/api/users/:uid/role", async (req: express.Request, res: express.Response) => {
+  try {
+    if (!db) {
+      res.status(500).json({ error: "Database not initialized" });
+      return;
+    }
+    const { uid } = req.params;
+    const { role } = req.body;
+    if (!role || !["patient", "admin", "admin_administrator"].includes(role)) {
+      res.status(400).json({ error: "Invalid role specified." });
+      return;
+    }
+    const userRef = doc(db, "users", uid);
+    await setDoc(userRef, { role }, { merge: true });
+    res.json({ success: true, message: `User role updated to ${role}.` });
+  } catch (error: any) {
+    console.error("Error updating user role:", error);
+    res.status(500).json({ error: error.message || "Failed to update user role." });
+  }
+});
+
+// Aggregated financial summary & all payments (Admin Administrator & Admin)
+app.get("/api/admin/financial-summary", async (req: express.Request, res: express.Response) => {
+  try {
+    if (!db) {
+      res.json({ totalRevenue: 0, appointmentsRevenue: 0, pharmacyRevenue: 0, billsRevenue: 0, premiumRevenue: 0 });
+      return;
+    }
+
+    // 1. Paid appointments
+    const appSnap = await getDocs(collection(db, "appointments"));
+    let appointmentsRevenue = 0;
+    let paidAppointmentsCount = 0;
+    appSnap.forEach((d) => {
+      const data = d.data();
+      if (data.paymentStatus === "paid" || data.amountPaid) {
+        appointmentsRevenue += Number(data.amountPaid || data.paymentAmount || 3500);
+        paidAppointmentsCount++;
+      }
+    });
+
+    // 2. Paid medicines
+    const medSnap = await getDocs(collection(db, "medicine_purchases"));
+    let pharmacyRevenue = 0;
+    let paidMedicinesCount = 0;
+    medSnap.forEach((d) => {
+      const data = d.data();
+      pharmacyRevenue += Number(data.price || 0);
+      paidMedicinesCount++;
+    });
+
+    // 3. Paid medical bills
+    const billsSnap = await getDocs(collection(db, "medical_bills"));
+    let billsRevenue = 0;
+    let paidBillsCount = 0;
+    billsSnap.forEach((d) => {
+      const data = d.data();
+      if (data.status === "paid") {
+        billsRevenue += Number(data.amount || 0);
+        paidBillsCount++;
+      }
+    });
+
+    // 4. Premium subscriptions
+    const usersSnap = await getDocs(collection(db, "users"));
+    let premiumRevenue = 0;
+    let premiumCount = 0;
+    usersSnap.forEach((d) => {
+      const data = d.data();
+      if (data.isPremium) {
+        premiumRevenue += 500;
+        premiumCount++;
+      }
+    });
+
+    const totalRevenue = appointmentsRevenue + pharmacyRevenue + billsRevenue + premiumRevenue;
+
+    res.json({
+      totalRevenue,
+      appointmentsRevenue,
+      pharmacyRevenue,
+      billsRevenue,
+      premiumRevenue,
+      counts: {
+        paidAppointmentsCount,
+        paidMedicinesCount,
+        paidBillsCount,
+        premiumCount
+      }
+    });
+  } catch (error: any) {
+    console.error("Error retrieving financial summary:", error);
+    res.status(500).json({ error: error.message || "Failed to retrieve financial summary." });
+  }
+});
+
 // Update system settings/fees
 app.post("/api/settings/fees/update", async (req: express.Request, res: express.Response) => {
   const { appointmentBookingFee, premiumSubscriptionFee } = req.body;
@@ -2133,27 +2382,32 @@ async function seedDoctorsCollection() {
   }
 }
 
-function startServer() {
+async function startServer() {
   if (process.env.NODE_ENV !== "production") {
-    import("vite").then(({ createServer: createViteServer }) => {
-      createViteServer({
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: "spa",
-      }).then((vite) => {
-        app.use(vite.middlewares);
-        console.log("[Server] Vite dev server mounted.");
       });
-    }).catch((err) => {
+      app.use(vite.middlewares);
+      console.log("[Server] Vite dev server mounted.");
+    } catch (err) {
       console.error("[Server] Failed to load Vite dev server:", err);
-    });
+    }
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
     console.log("[Server] Production static files serving activated.");
   }
+
+  // Seed initial doctors asynchronously
+  seedDoctorsCollection().catch((err) => {
+    console.error("[Seeding] Error seeding doctors:", err);
+  });
 
   if (!process.env.VERCEL) {
     app.listen(PORT, "0.0.0.0", () => {

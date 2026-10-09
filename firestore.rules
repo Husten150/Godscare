@@ -16,11 +16,20 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isAdminAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email in ["hustenisama@gmail.com", "austineisama150@gmail.com", "austineisama@gmail.com"] || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["admin_administrator", "admin administrator", "super_admin", "director"])
+      );
+    }
+
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == "hustenisama@gmail.com" || 
+        isAdminAdmin() ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin")
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["admin", "admin_administrator", "admin administrator", "staff_admin", "admin.staff"]))
       );
     }
 
@@ -40,15 +49,15 @@ service cloud.firestore {
     // --- Users Collection ---
     match /users/{userId} {
       allow read: if isSignedIn() || request.auth == null;
-      allow create: if (isSignedIn() && isOwner(userId) && incoming().uid == userId && incoming().role in ["patient", "admin"]) || request.auth == null;
+      allow create: if (isSignedIn() && isOwner(userId) && incoming().uid == userId && incoming().role in ["patient", "admin", "admin_administrator", "admin administrator"]) || request.auth == null;
       allow update: if (isSignedIn() && (isOwner(userId) || isAdmin()) && (
         // Prevent self-assigned admin privilege escalation
-        (incoming().role == existing().role || isAdmin()) &&
+        (incoming().role == existing().role || isAdminAdmin()) &&
         // Immutability checks
         incoming().uid == existing().uid &&
         incoming().email == existing().email
       )) || (request.auth == null && incoming().diff(existing()).affectedKeys().hasOnly(["isPremium"]));
-      allow delete: if isAdmin();
+      allow delete: if isAdminAdmin();
     }
 
     // --- Doctors Collection ---
