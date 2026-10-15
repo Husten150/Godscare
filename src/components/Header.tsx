@@ -126,16 +126,16 @@ export default function Header({
               </>
             ) : (
               <button
-                onClick={() => handleNavClick("admin_administrator")}
+                onClick={() => handleNavClick("auth")}
                 className={`font-sans font-medium text-xs tracking-wide uppercase transition-colors flex items-center space-x-1.5 cursor-pointer px-2.5 py-1 rounded-md border ${
-                  currentView === "admin_administrator" || currentView === "admin"
-                    ? isDark ? "text-amber-300 border-amber-500/50 bg-amber-500/20 font-bold" : "text-amber-900 border-amber-400 bg-amber-100 font-semibold"
-                    : isDark ? "text-amber-400/90 border-amber-500/30 hover:bg-amber-500/10" : "text-amber-800 border-amber-300 hover:bg-amber-50"
+                  currentView === "auth"
+                    ? isDark ? "text-emerald-300 border-emerald-500/50 bg-emerald-500/20 font-bold" : "text-emerald-900 border-emerald-400 bg-emerald-100 font-semibold"
+                    : isDark ? "text-zinc-400 hover:text-white border-zinc-800 hover:bg-zinc-800/50" : "text-zinc-600 border-zinc-200 hover:bg-zinc-50"
                 }`}
-                id="nav-admin-portal-link"
+                id="nav-signin-link"
               >
-                <Shield className="h-3.5 w-3.5 text-amber-400" />
-                <span>Admin Portal</span>
+                <LogIn className="h-3.5 w-3.5 text-emerald-500" />
+                <span>Portal Sign In</span>
               </button>
             )}
           </nav>
@@ -434,14 +434,14 @@ export default function Header({
             </>
           ) : (
             <button
-              onClick={() => handleNavClick("admin_administrator")}
+              onClick={() => handleNavClick("auth")}
               className={`block w-full text-left px-3 py-2 rounded-md font-sans font-medium text-sm cursor-pointer ${
-                currentView === "admin_administrator" || currentView === "admin"
-                  ? isDark ? "bg-amber-950/60 text-amber-300 font-bold border border-amber-500/30" : "bg-amber-100 text-amber-900 font-semibold border border-amber-300"
-                  : isDark ? "text-amber-400 hover:bg-zinc-900" : "text-amber-800 hover:bg-zinc-50/50 hover:text-amber-900"
+                currentView === "auth"
+                  ? isDark ? "bg-zinc-900 text-emerald-400 font-bold" : "bg-zinc-50 text-zinc-900 font-semibold"
+                  : isDark ? "text-zinc-300 hover:bg-zinc-900" : "text-zinc-600 hover:bg-zinc-50/50 hover:text-zinc-900"
               }`}
             >
-              Admin Portal
+              Sign In to Portal
             </button>
           )}
 

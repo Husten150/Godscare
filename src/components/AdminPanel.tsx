@@ -38,7 +38,8 @@ import {
   CreditCard,
   Mail,
   Upload,
-  Camera
+  Camera,
+  Lock
 } from "lucide-react";
 
 interface AdminPanelProps {
@@ -456,170 +457,22 @@ export default function AdminPanel({ themeMode = "light" }: AdminPanelProps = {}
     }
   };
 
-  // Update global system fees
+  // Price updates are restricted to Admin Administrator
   const handleUpdateGlobalFees = async (e: React.FormEvent) => {
     e.preventDefault();
-    setUpdatingFees(true);
-    setFeesSuccess("");
-    try {
-      const res = await fetch(getApiUrl("/api/settings/fees/update"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          appointmentBookingFee: Number(adminBookingFee),
-          premiumSubscriptionFee: Number(adminPremiumFee)
-        })
-      });
-      if (res.ok) {
-        setFeesSuccess("Global system fees have been updated successfully and took effect immediately!");
-        setTimeout(() => setFeesSuccess(""), 5000);
-      } else {
-        const d = await res.json();
-        throw new Error(d.error || "Failed to update global fees.");
-      }
-    } catch (err: any) {
-      console.warn("Server fees update failed, attempting direct Firestore fallback:", err);
-      try {
-        const docRef = doc(db, "system_settings", "fees");
-        await setDoc(docRef, {
-          appointmentBookingFee: Number(adminBookingFee),
-          premiumSubscriptionFee: Number(adminPremiumFee)
-        });
-        setFeesSuccess("Global system fees updated successfully via secure client-side database!");
-        setTimeout(() => setFeesSuccess(""), 5000);
-      } catch (fallbackErr: any) {
-        console.error("Firestore fees update fallback failed:", fallbackErr);
-        alert(`Error: ${fallbackErr.message || "Failed to update fees."}`);
-      }
-    } finally {
-      setUpdatingFees(false);
-    }
+    alert("Unauthorized: Only the Admin Administrator is authorized to change hospital consultation or package fees.");
   };
 
-  // Update a medicine details/price
+  // Medicine price updates are restricted to Admin Administrator
   const handleUpdateMedicinePrice = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingMedicineId) return;
-    setUpdatingMedicine(true);
-    try {
-      const res = await fetch(getApiUrl(`/api/medicines/${editingMedicineId}/update`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          price: Number(editMedPrice),
-          name: editMedName,
-          description: editMedDesc
-        })
-      });
-      if (res.ok) {
-        setEditingMedicineId(null);
-        loadAdminData();
-      } else {
-        const d = await res.json();
-        throw new Error(d.error || "Failed to update medicine.");
-      }
-    } catch (err: any) {
-      console.warn("Server medicine update failed, attempting direct Firestore fallback:", err);
-      try {
-        const medRef = doc(db, "medicines", editingMedicineId);
-        await updateDoc(medRef, {
-          price: Number(editMedPrice),
-          name: editMedName,
-          description: editMedDesc
-        });
-        setEditingMedicineId(null);
-        loadAdminData();
-        alert("Medicine updated successfully via secure client-side database!");
-      } catch (fallbackErr: any) {
-        console.error("Firestore medicine update fallback failed:", fallbackErr);
-        alert(`Error: ${fallbackErr.message || "Failed to update medicine."}`);
-      }
-    } finally {
-      setUpdatingMedicine(false);
-    }
+    alert("Unauthorized: Only the Admin Administrator is authorized to modify medicine prices or catalog formulations.");
   };
 
-  // Submit Add New Medicine Form
+  // Medicine additions are restricted to Admin Administrator
   const handleAddNewMedicine = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (addingNewMed) return;
-
-    setAddMedError("");
-    setAddMedSuccess("");
-
-    if (!newMedName || !newMedDescription || !newMedPrice) {
-      setAddMedError("Please fill in Medicine Name, Description, and Retail Price.");
-      return;
-    }
-
-    try {
-      setAddingNewMed(true);
-      const res = await fetch(getApiUrl("/api/medicines/add"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newMedName,
-          category: newMedCategory,
-          symptoms: newMedSymptoms,
-          description: newMedDescription,
-          price: Number(newMedPrice)
-        })
-      });
-
-      if (res.ok) {
-        setAddMedSuccess("New medicine formulation added to pharmacy stock successfully!");
-        setNewMedName("");
-        setNewMedSymptoms("");
-        setNewMedDescription("");
-        setNewMedPrice("");
-        setNewMedCategory("mild");
-        loadAdminData();
-        setTimeout(() => {
-          setShowAddMedForm(false);
-          setAddMedSuccess("");
-        }, 1500);
-      } else {
-        const d = await res.json();
-        throw new Error(d.error || "Failed to add medicine.");
-      }
-    } catch (err: any) {
-      console.warn("Server medicine addition failed, attempting direct Firestore fallback:", err);
-      try {
-        const newId = `med-${Date.now()}`;
-        const symptomsArray = typeof newMedSymptoms === "string" 
-          ? newMedSymptoms.split(",").map((s: string) => s.trim()).filter((s: string) => s.length > 0)
-          : ["General Symptoms"];
-        
-        const newMedData = {
-          id: newId,
-          name: newMedName,
-          category: newMedCategory,
-          symptoms: symptomsArray,
-          description: newMedDescription,
-          price: Number(newMedPrice)
-        };
-
-        const medRef = doc(db, "medicines", newId);
-        await setDoc(medRef, newMedData);
-
-        setAddMedSuccess("New medicine formulation added via secure client-side database!");
-        setNewMedName("");
-        setNewMedSymptoms("");
-        setNewMedDescription("");
-        setNewMedPrice("");
-        setNewMedCategory("mild");
-        loadAdminData();
-        setTimeout(() => {
-          setShowAddMedForm(false);
-          setAddMedSuccess("");
-        }, 1500);
-      } catch (fallbackErr: any) {
-        console.error("Firestore medicine addition fallback failed:", fallbackErr);
-        setAddMedError(fallbackErr.message || "Error adding medicine formulation.");
-      }
-    } finally {
-      setAddingNewMed(false);
-    }
+    alert("Unauthorized: Only the Admin Administrator is authorized to add new medicines or pricing to stock.");
   };
 
   // Manage patient bills loader
@@ -711,38 +564,6 @@ export default function AdminPanel({ themeMode = "light" }: AdminPanelProps = {}
     } catch (err: any) {
       alert(err.message || "Failed to delete bill.");
     }
-  };
-
-  // Trigger modal for adding a doctor
-  const triggerAddDoctor = () => {
-    setEditingDoctor(null);
-    setDocName("");
-    setDocSpecialty("");
-    setDocDept("Cardiology");
-    setDocExp("");
-    setDocEdu("");
-    setDocRating(4.9);
-    setDocBio("");
-    setDocImg("https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400");
-    setModalError("");
-    setModalSuccess("");
-    setShowDoctorModal(true);
-  };
-
-  // Trigger modal for editing a doctor
-  const triggerEditDoctor = (docProfile: Doctor) => {
-    setEditingDoctor(docProfile);
-    setDocName(docProfile.name);
-    setDocSpecialty(docProfile.specialty);
-    setDocDept(docProfile.department);
-    setDocExp(docProfile.experience);
-    setDocEdu(docProfile.education);
-    setDocRating(docProfile.rating);
-    setDocBio(docProfile.bio);
-    setDocImg(docProfile.image);
-    setModalError("");
-    setModalSuccess("");
-    setShowDoctorModal(true);
   };
 
   // File upload and drag-and-drop handlers for Doctor profile images with automatic canvas-based compression
@@ -869,74 +690,22 @@ export default function AdminPanel({ themeMode = "light" }: AdminPanelProps = {}
     }
   };
 
-  // Submit Doctor Add / Edit Form
-  const handleSubmitDoctorForm = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (modalLoading) return;
-
-    setModalError("");
-    setModalSuccess("");
-
-    const missingFields: string[] = [];
-    if (!docName.trim()) missingFields.push("Full Name");
-    if (!docSpecialty.trim()) missingFields.push("Specialty");
-    if (!docExp.trim()) missingFields.push("Years of Experience");
-    if (!docEdu.trim()) missingFields.push("Education Details");
-    if (!docBio.trim()) missingFields.push("Clinical Bio");
-    if (!docImg) missingFields.push("Clinician Portrait");
-
-    if (missingFields.length > 0) {
-      setModalError(`Please complete all fields. Missing: ${missingFields.join(", ")}.`);
-      return;
-    }
-
-    try {
-      setModalLoading(true);
-
-      const doctorId = editingDoctor ? editingDoctor.id : `doc-${docName.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
-      const docData: Doctor = {
-        id: doctorId,
-        name: docName,
-        specialty: docSpecialty,
-        department: docDept,
-        experience: docExp,
-        education: docEdu,
-        rating: parseFloat(docRating.toString()) || 4.9,
-        availableDays: (editingDoctor && editingDoctor.availableDays) ? editingDoctor.availableDays : ["Monday", "Wednesday", "Friday"],
-        availableHours: (editingDoctor && editingDoctor.availableHours) ? editingDoctor.availableHours : ["09:00 AM", "11:00 AM", "02:00 PM", "03:30 PM"],
-        image: docImg,
-        bio: docBio
-      };
-
-      // Set directly in firestore
-      await setDoc(doc(db, "doctors", doctorId), docData);
-
-      setModalSuccess(editingDoctor ? "Clinician updated successfully!" : "New clinician added to medical roster!");
-      setTimeout(() => {
-        setShowDoctorModal(false);
-        loadAdminData();
-      }, 1000);
-
-    } catch (err: any) {
-      console.error("Save doctor error:", err);
-      setModalError(err.message || "Could not save doctor profile.");
-    } finally {
-      setModalLoading(false);
-    }
+  // Doctor management is restricted to Admin Administrator
+  const triggerAddDoctor = () => {
+    alert("Unauthorized: Only the Admin Administrator is authorized to add doctors to the medical roster.");
   };
 
-  // Delete doctor profile
-  const handleDeleteDoctor = async (doctorId: string) => {
-    const confirmDelete = window.confirm("Are you sure you want to permanently remove this clinician from the registry?");
-    if (!confirmDelete) return;
+  const triggerEditDoctor = (_docProfile: Doctor) => {
+    alert("Unauthorized: Only the Admin Administrator is authorized to modify doctor profiles or consultation rates.");
+  };
 
-    try {
-      await deleteDoc(doc(db, "doctors", doctorId));
-      loadAdminData();
-    } catch (err) {
-      console.error("Delete doctor failed:", err);
-      alert("Failed to delete clinician.");
-    }
+  const handleSubmitDoctorForm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    alert("Unauthorized: Only the Admin Administrator is authorized to add or modify doctors.");
+  };
+
+  const handleDeleteDoctor = async (_doctorId: string) => {
+    alert("Unauthorized: Only the Admin Administrator is authorized to remove doctors from the medical roster.");
   };
 
   // Filtered Appointments
@@ -1218,7 +987,7 @@ export default function AdminPanel({ themeMode = "light" }: AdminPanelProps = {}
               </div>
             )}
 
-            {/* SUBTAB 2: DOCTOR REGISTRY */}
+            {/* SUBTAB 2: DOCTOR REGISTRY (STAFF READ-ONLY) */}
             {activeSubTab === "doctors" && (
               <div className="space-y-6">
                 
@@ -1236,9 +1005,9 @@ export default function AdminPanel({ themeMode = "light" }: AdminPanelProps = {}
                     />
                   </div>
 
-                  <div className="px-3 py-2 bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 rounded-lg text-xs font-mono font-bold flex items-center gap-2">
-                    <Shield className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                    <span>Doctor modifications & pricing reserved for Admin Administrator</span>
+                  <div className="px-3.5 py-2 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-xl text-xs font-mono font-bold flex items-center gap-2">
+                    <Lock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                    <span>Doctor additions, edits & removals restricted to Admin Administrator alone</span>
                   </div>
                 </div>
 
@@ -1254,7 +1023,7 @@ export default function AdminPanel({ themeMode = "light" }: AdminPanelProps = {}
                           <th className="px-5 py-3">Department</th>
                           <th className="px-5 py-3">Specialty</th>
                           <th className="px-5 py-3">Academic Base</th>
-                          <th className="px-5 py-3 text-right">Actions</th>
+                          <th className="px-5 py-3 text-right">Roster Authority</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-150 text-zinc-700">
@@ -1271,21 +1040,11 @@ export default function AdminPanel({ themeMode = "light" }: AdminPanelProps = {}
                             <td className="px-5 py-4 text-zinc-500 text-xs truncate max-w-[200px]" title={docProfile.education}>
                               {docProfile.education}
                             </td>
-                            <td className="px-5 py-4 text-right space-x-1.5">
-                              <button
-                                onClick={() => triggerEditDoctor(docProfile)}
-                                className="p-1.5 border border-zinc-200 hover:border-zinc-400 text-zinc-500 hover:text-zinc-900 rounded-lg transition-all cursor-pointer"
-                                title="Edit profile"
-                              >
-                                <Edit className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteDoctor(docProfile.id)}
-                                className="p-1.5 border border-zinc-200 hover:border-red-200 hover:bg-red-50 text-zinc-450 hover:text-red-600 rounded-lg transition-all cursor-pointer"
-                                title="Delete profile"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
+                            <td className="px-5 py-4 text-right">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono font-semibold bg-zinc-100 text-zinc-600 border border-zinc-200">
+                                <Lock className="h-3 w-3 text-zinc-400" />
+                                <span>Admin Administrator Managed</span>
+                              </span>
                             </td>
                           </tr>
                         ))}
@@ -1368,191 +1127,75 @@ export default function AdminPanel({ themeMode = "light" }: AdminPanelProps = {}
             {activeSubTab === "billing_fees" && (
               <div className="space-y-8 animate-fade-in">
                 
-                {/* 1. GLOBAL FEES SECTION */}
+                {/* 1. OFFICIAL HOSPITAL FEE SCHEDULE (READ-ONLY FOR STAFF ADMIN) */}
                 <div className="bg-white border border-zinc-200 rounded-xl p-6 md:p-8 space-y-6">
-                  <div className="border-b border-zinc-100 pb-4">
-                    <h3 className="text-base font-bold text-zinc-950 font-display flex items-center gap-2">
-                      <Hospital className="h-5 w-5 text-emerald-500" />
-                      <span>Global Hospital Consultation & Subscription Fees</span>
-                    </h3>
-                    <p className="text-xs text-zinc-500 font-sans">Set default pricing for clinical consultations and premium health packages</p>
+                  <div className="border-b border-zinc-100 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div>
+                      <h3 className="text-base font-bold text-zinc-950 font-display flex items-center gap-2">
+                        <Hospital className="h-5 w-5 text-emerald-500" />
+                        <span>Official Hospital Consultation & Subscription Fees (Read-Only)</span>
+                      </h3>
+                      <p className="text-xs text-zinc-500 font-sans">Official baseline rates applied across the hospital for consultations and patient plans</p>
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/20">
+                      <Lock className="h-3.5 w-3.5 text-amber-500" />
+                      <span>Price Changes Locked (Admin Administrator Only)</span>
+                    </span>
                   </div>
 
-                  {feesSuccess && (
-                    <div className="bg-emerald-50 text-emerald-800 text-xs p-3 rounded-lg border border-emerald-100 flex items-center space-x-2 font-sans">
-                      <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
-                      <span>{feesSuccess}</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="p-5 bg-zinc-50/70 border border-zinc-200 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Consultation Booking Fee</span>
+                        <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-zinc-200/70 text-zinc-600">Fixed</span>
+                      </div>
+                      <div className="text-2xl font-mono font-bold text-zinc-900">
+                        ₦{adminBookingFee.toLocaleString()}
+                      </div>
+                      <p className="text-xs text-zinc-500 font-sans">
+                        Standard consultation charge when booking specialist clinicians. Price changes restricted to Admin Administrator.
+                      </p>
                     </div>
-                  )}
 
-                  <form onSubmit={handleUpdateGlobalFees} className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-end">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Default Consultation Booking Fee (₦)</label>
-                      <input
-                        type="number"
-                        value={adminBookingFee}
-                        onChange={(e) => setAdminBookingFee(Number(e.target.value))}
-                        className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs font-mono focus:outline-hidden focus:border-zinc-400 bg-white"
-                        placeholder="e.g. 3500"
-                        required
-                      />
+                    <div className="p-5 bg-zinc-50/70 border border-zinc-200 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Premium Upgrade Subscription</span>
+                        <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-zinc-200/70 text-zinc-600">Fixed</span>
+                      </div>
+                      <div className="text-2xl font-mono font-bold text-zinc-900">
+                        ₦{adminPremiumFee.toLocaleString()}
+                      </div>
+                      <p className="text-xs text-zinc-500 font-sans">
+                        Monthly subscription fee for VIP patient care and priority diagnostics. Price changes restricted to Admin Administrator.
+                      </p>
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Premium Upgrade Subscription Fee (₦)</label>
-                      <input
-                        type="number"
-                        value={adminPremiumFee}
-                        onChange={(e) => setAdminPremiumFee(Number(e.target.value))}
-                        className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs font-mono focus:outline-hidden focus:border-zinc-400 bg-white"
-                        placeholder="e.g. 500"
-                        required
-                      />
-                    </div>
-                    <div className="sm:col-span-2 text-right">
-                      <button
-                        type="submit"
-                        disabled={updatingFees}
-                        className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-55"
-                      >
-                        {updatingFees ? "Applying updates..." : "Update Global Fees"}
-                      </button>
-                    </div>
-                  </form>
+                  </div>
                 </div>
 
-                {/* 2. APPROVED PHARMACY PRICING */}
+                {/* 2. APPROVED PHARMACY CATALOG (READ-ONLY FOR STAFF ADMIN) */}
                 <div className="bg-white border border-zinc-200 rounded-xl p-6 md:p-8 space-y-6">
                   <div className="border-b border-zinc-100 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                       <h3 className="text-base font-bold text-zinc-950 font-display flex items-center gap-2">
                         <Pill className="h-5 w-5 text-emerald-500" />
-                        <span>Approved Pharmacy Catalog & Drug Pricing</span>
+                        <span>Approved Pharmacy Catalog & Drug Prices (Read-Only)</span>
                       </h3>
-                      <p className="text-xs text-zinc-500 font-sans">Manage available therapeutics, symptoms targeting, and retail prices</p>
+                      <p className="text-xs text-zinc-500 font-sans">Reference catalog of medications, target indications, and approved prices</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowAddMedForm(!showAddMedForm);
-                        setAddMedError("");
-                        setAddMedSuccess("");
-                      }}
-                      className="px-3.5 py-2 bg-zinc-950 hover:bg-zinc-800 text-white rounded-lg text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-xs"
-                    >
-                      <Plus className="h-3.5 w-3.5 text-emerald-400" />
-                      <span>{showAddMedForm ? "Cancel" : "Add Medicine"}</span>
-                    </button>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/20">
+                      <Lock className="h-3.5 w-3.5 text-amber-500" />
+                      <span>Drug Prices & Additions Managed by Admin Administrator Alone</span>
+                    </span>
                   </div>
-
-                  {/* Collapsible Add New Medicine Form */}
-                  {showAddMedForm && (
-                    <form onSubmit={handleAddNewMedicine} className="p-5 bg-zinc-50 border border-zinc-200 rounded-xl space-y-4 text-left animate-in fade-in slide-in-from-top-4 duration-200">
-                      <h4 className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-400 border-b border-zinc-200 pb-2">Add New Formulation to Stock</h4>
-                      
-                      {addMedSuccess && (
-                        <div className="bg-emerald-50 text-emerald-800 text-xs p-3 rounded-lg border border-emerald-100 font-sans">
-                          {addMedSuccess}
-                        </div>
-                      )}
-                      
-                      {addMedError && (
-                        <div className="bg-red-50 text-red-700 text-xs p-3 rounded-lg border border-red-100 font-sans">
-                          {addMedError}
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Medicine Name</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. Paracetamol BP 500mg"
-                            value={newMedName}
-                            onChange={(e) => setNewMedName(e.target.value)}
-                            className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-400"
-                            required
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Price (₦)</label>
-                          <input
-                            type="number"
-                            placeholder="e.g. 1500"
-                            value={newMedPrice}
-                            onChange={(e) => setNewMedPrice(e.target.value)}
-                            className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white font-mono focus:outline-hidden focus:border-zinc-400"
-                            required
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Sickness Severity Category</label>
-                          <select
-                            value={newMedCategory}
-                            onChange={(e: any) => setNewMedCategory(e.target.value)}
-                            className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-400 font-bold"
-                          >
-                            <option value="mild">Mild (OTC, Pain Relievers, vitamins)</option>
-                            <option value="moderate">Moderate (Standard prescriptions, specialized cough syrups)</option>
-                            <option value="severe">Severe (Critical anti-hypertensives, specialized antibiotics)</option>
-                          </select>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Target Symptoms / Indications (Comma-separated)</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. Fever, Headache, Muscle pain"
-                            value={newMedSymptoms}
-                            onChange={(e) => setNewMedSymptoms(e.target.value)}
-                            className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-400"
-                          />
-                        </div>
-
-                        <div className="space-y-1.5 sm:col-span-2">
-                          <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Description & Clinical Usage Guidelines</label>
-                          <textarea
-                            placeholder="Enter description, frequency directions, food precautions, etc..."
-                            value={newMedDescription}
-                            onChange={(e) => setNewMedDescription(e.target.value)}
-                            rows={3}
-                            className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-400"
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end gap-3 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowAddMedForm(false);
-                            setAddMedError("");
-                          }}
-                          className="px-4 py-2 border border-zinc-200 hover:bg-zinc-100 text-zinc-600 rounded-lg text-xs font-semibold cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={addingNewMed}
-                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-mono font-bold uppercase tracking-wider cursor-pointer shadow-sm disabled:opacity-55"
-                        >
-                          {addingNewMed ? "Adding formulation..." : "Add to Pharmacy Stock"}
-                        </button>
-                      </div>
-                    </form>
-                  )}
 
                   <div className="overflow-x-auto border border-zinc-100 rounded-xl">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-zinc-50/50 border-b border-zinc-100">
                           <th className="px-5 py-3 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Medicine Name</th>
-                          <th className="px-5 py-3 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Sickness Category & Description</th>
+                          <th className="px-5 py-3 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Category & Indications</th>
                           <th className="px-5 py-3 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Retail Price</th>
-                          <th className="px-5 py-3 text-right text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Action</th>
+                          <th className="px-5 py-3 text-right text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Pricing Control</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-100">
@@ -1566,71 +1209,14 @@ export default function AdminPanel({ themeMode = "light" }: AdminPanelProps = {}
                               <span className="text-[10px] font-semibold bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-md uppercase tracking-wider inline-block mb-1">{med.category}</span>
                               <p className="text-xs text-zinc-500 font-sans leading-relaxed">{med.description}</p>
                             </td>
-                            <td className="px-5 py-4 font-mono font-bold text-zinc-900 text-xs">
+                            <td className="px-5 py-4 font-mono font-bold text-emerald-600 text-xs">
                               ₦{med.price.toLocaleString()}
                             </td>
                             <td className="px-5 py-4 text-right">
-                              {editingMedicineId === med.id ? (
-                                <form onSubmit={handleUpdateMedicinePrice} className="inline-flex flex-col gap-2 p-3 bg-zinc-50 border border-zinc-200 rounded-lg text-left max-w-xs">
-                                  <div className="space-y-1">
-                                    <label className="text-[9px] font-mono text-zinc-450 uppercase">Edit Name</label>
-                                    <input
-                                      type="text"
-                                      value={editMedName}
-                                      onChange={(e) => setEditMedName(e.target.value)}
-                                      className="px-2 py-1 border border-zinc-200 rounded-md text-xs w-full bg-white font-medium"
-                                      required
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <label className="text-[9px] font-mono text-zinc-450 uppercase">Edit Description</label>
-                                    <textarea
-                                      value={editMedDesc}
-                                      onChange={(e) => setEditMedDesc(e.target.value)}
-                                      className="px-2 py-1 border border-zinc-200 rounded-md text-xs w-full bg-white h-12 resize-none"
-                                      required
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <label className="text-[9px] font-mono text-zinc-450 uppercase">Edit Price (₦)</label>
-                                    <input
-                                      type="number"
-                                      value={editMedPrice}
-                                      onChange={(e) => setEditMedPrice(e.target.value)}
-                                      className="px-2 py-1 border border-zinc-200 rounded-md text-xs w-full font-mono bg-white"
-                                      required
-                                    />
-                                  </div>
-                                  <div className="flex gap-2 justify-end pt-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingMedicineId(null)}
-                                      className="px-2 py-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-md text-[10px] cursor-pointer"
-                                    >
-                                      Cancel
-                                    </button>
-                                    <button
-                                      type="submit"
-                                      disabled={updatingMedicine}
-                                      className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 text-white rounded-md text-[10px] font-bold cursor-pointer"
-                                    >
-                                      {updatingMedicine ? "Saving..." : "Save"}
-                                    </button>
-                                  </div>
-                                </form>
-                              ) : (
-                                <button
-                                  onClick={() => {
-                                    setEditingMedicineId(med.id);
-                                    setEditMedPrice(med.price);
-                                    setEditMedName(med.name);
-                                    setEditMedDesc(med.description);
-                                  }}
-                                  className="px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-800 rounded-lg text-xs font-semibold cursor-pointer"
-                                >
-                                  Modify Price / Info
-                                </button>
-                              )}
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-mono text-zinc-600 bg-zinc-100 border border-zinc-200 font-semibold">
+                                <Lock className="h-2.5 w-2.5 text-zinc-400" />
+                                <span>Official Rate</span>
+                              </span>
                             </td>
                           </tr>
                         ))}
@@ -1895,240 +1481,7 @@ export default function AdminPanel({ themeMode = "light" }: AdminPanelProps = {}
           </div>
         </div>
 
-        {/* CLINICIAN ADD/EDIT POPUP MODAL */}
-        {showDoctorModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-xs">
-            <div className="bg-white rounded-xl max-w-xl w-full max-h-[90vh] overflow-y-auto border border-zinc-200 shadow-xl">
-              <div className="p-6 md:p-8 space-y-6">
-                
-                {/* Header */}
-                <div className="flex justify-between items-start pb-2 border-b border-zinc-100">
-                  <div>
-                    <h3 className="text-base font-bold text-zinc-950 font-display">
-                      {editingDoctor ? `Configure ${editingDoctor.name}` : "Add Specialist Clinician"}
-                    </h3>
-                    <p className="text-xs text-zinc-500 font-sans">Configure clinic wing and academic specifications</p>
-                  </div>
-                  <button 
-                    onClick={() => setShowDoctorModal(false)}
-                    className="p-1 rounded-md text-zinc-400 hover:text-zinc-950 hover:bg-zinc-50 cursor-pointer text-base font-bold leading-none h-7 w-7 flex items-center justify-center"
-                  >
-                    ✕
-                  </button>
-                </div>
 
-                {/* Form Alerts */}
-                {modalError && (
-                  <div className="bg-red-50 text-red-700 text-xs p-3 rounded-lg border border-red-100 font-sans">
-                    {modalError}
-                  </div>
-                )}
-
-                {modalSuccess && (
-                  <div className="bg-emerald-50 text-emerald-800 text-xs p-3 rounded-lg border border-emerald-100 font-sans">
-                    {modalSuccess}
-                  </div>
-                )}
-
-                {/* Form layout */}
-                <form onSubmit={handleSubmitDoctorForm} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  
-                  {/* Name */}
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Full Name</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Dr. Arthur Pendragon"
-                      value={docName}
-                      onChange={(e) => setDocName(e.target.value)}
-                      className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-450"
-                      required
-                    />
-                  </div>
-
-                  {/* Specialty */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Specialty</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Pediatric Surgeon"
-                      value={docSpecialty}
-                      onChange={(e) => setDocSpecialty(e.target.value)}
-                      className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-450"
-                      required
-                    />
-                  </div>
-
-                  {/* Dept selection */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Department Wing</label>
-                    <select
-                      value={docDept}
-                      onChange={(e) => setDocDept(e.target.value)}
-                      className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-450"
-                    >
-                      <option value="Cardiology">Cardiology</option>
-                      <option value="Pediatrics">Pediatrics</option>
-                      <option value="Neurology">Neurology</option>
-                      <option value="Orthopedics">Orthopedics</option>
-                      <option value="Dermatology">Dermatology</option>
-                      <option value="General Medicine">General Medicine</option>
-                    </select>
-                  </div>
-
-                  {/* Experience */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Years of Experience</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 15 years"
-                      value={docExp}
-                      onChange={(e) => setDocExp(e.target.value)}
-                      className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-450"
-                      required
-                    />
-                  </div>
-
-                  {/* Education */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Education Details</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. M.D. Oxford Medical School"
-                      value={docEdu}
-                      onChange={(e) => setDocEdu(e.target.value)}
-                      className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-450"
-                      required
-                    />
-                  </div>
-
-                  {/* Rating */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Initial Rating (1 - 5)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="1"
-                      max="5"
-                      value={docRating}
-                      onChange={(e) => setDocRating(parseFloat(e.target.value))}
-                      className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-450"
-                      required
-                    />
-                  </div>
-
-                  {/* Photo Uploader Section */}
-                  <div className="sm:col-span-2 space-y-2 border border-zinc-100 rounded-xl p-4 bg-zinc-50/50" id="doctor-photo-uploader-container">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 block">Clinician Portrait</span>
-                    
-                    <div className="flex flex-col sm:flex-row gap-4 items-center">
-                      {/* Left: Interactive Preview */}
-                      <div 
-                        onClick={() => document.getElementById("doctor-photo-upload")?.click()}
-                        className="relative w-24 h-24 sm:w-28 sm:h-28 bg-white border border-zinc-200 rounded-xl overflow-hidden flex items-center justify-center shadow-xs flex-shrink-0 group cursor-pointer hover:border-emerald-400 hover:shadow-md transition-all" 
-                        id="doctor-photo-preview-box"
-                      >
-                        {docImg ? (
-                          <>
-                            <img 
-                              src={docImg} 
-                              alt="Doctor portrait preview" 
-                              referrerPolicy="no-referrer" 
-                              className="w-full h-full object-cover transition-all group-hover:scale-105" 
-                              id="doctor-photo-preview-img"
-                            />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <span className="text-[9px] text-white font-semibold uppercase tracking-wider">Change Photo</span>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-center p-3 flex flex-col items-center justify-center">
-                            <Camera className="h-6 w-6 text-zinc-300 mb-1" />
-                            <span className="text-[8px] font-medium text-zinc-400 uppercase tracking-wider leading-tight">No Photo</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Right: Drag & Drop Zone */}
-                      <div 
-                        onDragEnter={handleDoctorImgDrag}
-                        onDragOver={handleDoctorImgDrag}
-                        onDragLeave={handleDoctorImgDrag}
-                        onDrop={handleDoctorImgDrop}
-                        onClick={() => document.getElementById("doctor-photo-upload")?.click()}
-                        className={`flex-1 w-full border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-all min-h-[96px] ${
-                          dragActive 
-                            ? "border-emerald-500 bg-emerald-50 text-emerald-700" 
-                            : "border-zinc-200 hover:border-zinc-300 bg-white hover:bg-zinc-50"
-                        }`}
-                        id="doctor-photo-drag-drop-zone"
-                      >
-                        <Upload className={`h-5 w-5 mb-1.5 transition-colors ${dragActive ? "text-emerald-500 animate-bounce" : "text-zinc-400"}`} />
-                        <p className="text-[11px] font-semibold text-zinc-700">
-                          Drag & drop picture, or <span className="text-emerald-600 hover:text-emerald-500 underline decoration-solid">browse</span>
-                        </p>
-                        <p className="text-[9px] text-zinc-400 mt-1">Supports PNG, JPG, or WebP (Max 1MB)</p>
-                        <input 
-                          type="file" 
-                          id="doctor-photo-upload" 
-                          accept="image/*" 
-                          className="hidden" 
-                          onChange={handleDoctorImgFileChange} 
-                        />
-                      </div>
-                    </div>
-
-                    {/* Alternative: Direct Image URL */}
-                    <div className="pt-2 border-t border-zinc-100/80 space-y-1">
-                      <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400 block">Alternative: Direct Image URL</label>
-                      <input
-                        type="text"
-                        placeholder="Pasted Unsplash/web image URL"
-                        value={docImg}
-                        onChange={(e) => handleDirectUrlChange(e.target.value)}
-                        className="w-full px-3 py-1.5 border border-zinc-200 rounded-lg text-xs bg-white focus:outline-hidden focus:border-zinc-450 font-sans"
-                        id="doctor-photo-url-input"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Bio */}
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Clinical Bio / Summary</label>
-                    <textarea
-                      placeholder="Describe medical expertise and accomplishments..."
-                      value={docBio}
-                      onChange={(e) => setDocBio(e.target.value)}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-xs bg-white placeholder:text-zinc-400 focus:outline-hidden focus:border-zinc-450"
-                      required
-                    />
-                  </div>
-
-                  {/* Footer CTAs */}
-                  <div className="sm:col-span-2 flex justify-end gap-3 border-t border-zinc-150 pt-5 mt-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowDoctorModal(false)}
-                      className="px-4 py-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-600 rounded-lg text-xs font-semibold cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={modalLoading}
-                      className="px-5 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg text-xs font-mono font-bold uppercase tracking-wider cursor-pointer transition-all"
-                    >
-                      {modalLoading ? "Saving..." : "Save clinician"}
-                    </button>
-                  </div>
-
-                </form>
-
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* PATIENT RECORD INSPECTOR POPUP */}
         {selectedPatient && (

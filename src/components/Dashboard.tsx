@@ -42,7 +42,8 @@ import {
   HeartPulse,
   CreditCard,
   Search,
-  Pill
+  Pill,
+  RotateCcw
 } from "lucide-react";
 
 interface DashboardProps {
@@ -78,7 +79,7 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
   // AI Agent States
   const [aiLoading, setAiLoading] = React.useState(false);
   const [aiInput, setAiInput] = React.useState("");
-  const [selectedChatbotRole, setSelectedChatbotRole] = React.useState<"physician" | "general_assistant" | "quick_triage" | "wellness_coach">("physician");
+  const [selectedChatbotRole, setSelectedChatbotRole] = React.useState<"general_assistant" | "physician" | "quick_triage" | "wellness_coach">("general_assistant");
   const [aiChatMessages, setAiChatMessages] = React.useState<{role: "user" | "model", text: string, thoughts?: any[], modelUsed?: string, roleUsed?: string}[]>(() => {
     try {
       const saved = sessionStorage.getItem(`godscare_chat_history_${userProfile.uid}`);
@@ -91,9 +92,7 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
     return [
       {
         role: "model",
-        text: "Welcome to GodsCare Medical Center Virtual Care Hub. I am your Attending Clinical Physician AI. How may I assist you with your health concerns or symptoms today?",
-        modelUsed: "gemini-3.1-pro-preview",
-        roleUsed: "physician"
+        text: "Hello! How can I help you today?"
       }
     ];
   });
@@ -751,7 +750,7 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
       console.error("[Clinical AI Error]:", err);
       setAiChatMessages(prev => [
         ...prev,
-        { role: "model" as const, text: "I apologize, but my diagnostic networks are currently offline. Please try again shortly." }
+        { role: "model" as const, text: "I'm having trouble connecting right now, but I'm here to help. Please try asking again in a moment." }
       ]);
     } finally {
       setAiLoading(false);
@@ -1505,156 +1504,36 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
             {activeTab === "ai_consultation" && (
               <div className="lg:col-span-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                 
-                {/* Left Column: Interactive Multi-Turn Chat */}
+                {/* Left Column: Interactive Chat */}
                 <div className="lg:col-span-8 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex flex-col h-[700px] overflow-hidden shadow-xs">
                   {/* Chat Header */}
-                  <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/80 flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2.5">
-                        <div className="p-2 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-lg border border-emerald-100 dark:border-emerald-900/50">
-                          <Sparkles className="h-4.5 w-4.5" />
-                        </div>
-                        <div>
-                          <h4 className="text-xs md:text-sm font-bold text-zinc-950 dark:text-zinc-100 font-display">GodsCare Multi-Turn Clinical AI</h4>
-                          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">Select specialized chatbot role & AI model complexity</p>
-                        </div>
+                  <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/80 flex items-center justify-between">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="p-2 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-lg border border-emerald-100 dark:border-emerald-900/50">
+                        <MessageSquare className="h-4.5 w-4.5" />
                       </div>
-                      <span className="flex items-center gap-1.5 text-[9px] font-mono font-bold uppercase bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 rounded-full border border-emerald-200/50 dark:border-emerald-800">
-                        <div className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-ping"></div>
-                        <span>Active Multi-Turn Stream</span>
-                      </span>
+                      <div>
+                        <h4 className="text-xs md:text-sm font-bold text-zinc-950 dark:text-zinc-100 font-display">Chat</h4>
+                        <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">Ask questions or request assistance</p>
+                      </div>
                     </div>
-
-                    {/* Role / Task Complexity Selector Tabs */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedChatbotRole("physician")}
-                        className={`p-2 rounded-lg text-left transition-all border cursor-pointer ${
-                          selectedChatbotRole === "physician"
-                            ? "bg-emerald-50 dark:bg-emerald-950/50 border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 shadow-2xs"
-                            : "bg-white dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold block">🩺 Physician</span>
-                          <span className="text-[8px] font-mono bg-emerald-200/60 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-300 px-1 py-0.5 rounded">Pro</span>
-                        </div>
-                        <p className="text-[9px] text-zinc-500 dark:text-zinc-400 font-mono mt-0.5 truncate">gemini-3.1-pro-preview</p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setSelectedChatbotRole("general_assistant")}
-                        className={`p-2 rounded-lg text-left transition-all border cursor-pointer ${
-                          selectedChatbotRole === "general_assistant"
-                            ? "bg-blue-50 dark:bg-blue-950/50 border-blue-300 dark:border-blue-700 text-blue-900 dark:text-blue-200 shadow-2xs"
-                            : "bg-white dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold block">💬 Care Guide</span>
-                          <span className="text-[8px] font-mono bg-blue-200/60 dark:bg-blue-900 text-blue-800 dark:text-blue-300 px-1 py-0.5 rounded">Flash</span>
-                        </div>
-                        <p className="text-[9px] text-zinc-500 dark:text-zinc-400 font-mono mt-0.5 truncate">gemini-3.5-flash</p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setSelectedChatbotRole("quick_triage")}
-                        className={`p-2 rounded-lg text-left transition-all border cursor-pointer ${
-                          selectedChatbotRole === "quick_triage"
-                            ? "bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 shadow-2xs"
-                            : "bg-white dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold block">⚡ Fast Triage</span>
-                          <span className="text-[8px] font-mono bg-amber-200/60 dark:bg-amber-900 text-amber-800 dark:text-amber-300 px-1 py-0.5 rounded">Lite</span>
-                        </div>
-                        <p className="text-[9px] text-zinc-500 dark:text-zinc-400 font-mono mt-0.5 truncate">gemini-3.1-flash-lite</p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setSelectedChatbotRole("wellness_coach")}
-                        className={`p-2 rounded-lg text-left transition-all border cursor-pointer ${
-                          selectedChatbotRole === "wellness_coach"
-                            ? "bg-teal-50 dark:bg-teal-950/50 border-teal-300 dark:border-teal-700 text-teal-900 dark:text-teal-200 shadow-2xs"
-                            : "bg-white dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold block">🌿 Wellness</span>
-                          <span className="text-[8px] font-mono bg-teal-200/60 dark:bg-teal-900 text-teal-800 dark:text-teal-300 px-1 py-0.5 rounded">Flash</span>
-                        </div>
-                        <p className="text-[9px] text-zinc-500 dark:text-zinc-400 font-mono mt-0.5 truncate">gemini-3.5-flash</p>
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAiChatMessages([{ role: "model", text: "Hello! How can I help you today?" }])}
+                      className="text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 p-1.5 rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-800 transition-colors flex items-center gap-1 cursor-pointer"
+                      title="Clear chat"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline text-[11px]">Clear</span>
+                    </button>
                   </div>
 
                   {/* Messages Stream */}
                   <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-zinc-50/20 dark:bg-zinc-950/30">
-                    {/* Role Suggestion Prompts */}
-                    {aiChatMessages.length <= 1 && (
-                      <div className="p-3 bg-zinc-100/60 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/60 rounded-xl space-y-2">
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
-                          Suggested queries for {selectedChatbotRole.replace("_", " ")}:
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {selectedChatbotRole === "physician" && (
-                            <>
-                              <button onClick={() => sendClinicalMessage("I have been having persistent chest tightness and mild fatigue for 2 days.")} className="text-[11px] bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 rounded-lg text-zinc-700 dark:text-zinc-200 hover:border-emerald-400 cursor-pointer text-left">
-                                "Persistent chest tightness & fatigue for 2 days"
-                              </button>
-                              <button onClick={() => sendClinicalMessage("Please analyze my latest health profile and recommend next clinical steps.")} className="text-[11px] bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 rounded-lg text-zinc-700 dark:text-zinc-200 hover:border-emerald-400 cursor-pointer text-left">
-                                "Analyze my patient profile & medical history"
-                              </button>
-                            </>
-                          )}
-                          {selectedChatbotRole === "general_assistant" && (
-                            <>
-                              <button onClick={() => sendClinicalMessage("How do I book an appointment with a cardiology specialist?")} className="text-[11px] bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 rounded-lg text-zinc-700 dark:text-zinc-200 hover:border-blue-400 cursor-pointer text-left">
-                                "How do I book a cardiology appointment?"
-                              </button>
-                              <button onClick={() => sendClinicalMessage("What are GodsCare Hospital working hours and emergency numbers?")} className="text-[11px] bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 rounded-lg text-zinc-700 dark:text-zinc-200 hover:border-blue-400 cursor-pointer text-left">
-                                "GodsCare clinic hours and contact info"
-                              </button>
-                            </>
-                          )}
-                          {selectedChatbotRole === "quick_triage" && (
-                            <>
-                              <button onClick={() => sendClinicalMessage("Quick triage: Sore throat, mild fever, runny nose.")} className="text-[11px] bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 rounded-lg text-zinc-700 dark:text-zinc-200 hover:border-amber-400 cursor-pointer text-left">
-                                "Sore throat, fever, runny nose triage"
-                              </button>
-                              <button onClick={() => sendClinicalMessage("Is sudden dizziness after standing up an emergency?")} className="text-[11px] bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 rounded-lg text-zinc-700 dark:text-zinc-200 hover:border-amber-400 cursor-pointer text-left">
-                                "Is sudden dizziness an emergency?"
-                              </button>
-                            </>
-                          )}
-                          {selectedChatbotRole === "wellness_coach" && (
-                            <>
-                              <button onClick={() => sendClinicalMessage("Can you give me a daily 5-step routine for stress reduction & sleep improvement?")} className="text-[11px] bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 rounded-lg text-zinc-700 dark:text-zinc-200 hover:border-teal-400 cursor-pointer text-left">
-                                "Daily stress reduction & sleep routine"
-                              </button>
-                              <button onClick={() => sendClinicalMessage("What are simple dietary habits to manage blood pressure naturally?")} className="text-[11px] bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 rounded-lg text-zinc-700 dark:text-zinc-200 hover:border-teal-400 cursor-pointer text-left">
-                                "Dietary habits for blood pressure management"
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
                     {aiChatMessages.map((msg, idx) => (
                       <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} space-y-1`}>
-                        <div className="flex items-center gap-1.5 text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                          {msg.role === 'user' ? 'Patient' : 'Clinical AI'}
-                          {msg.modelUsed && (
-                            <span className="text-[8px] font-mono px-1.5 py-0.2 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded border border-zinc-300/50 dark:border-zinc-700">
-                              {msg.modelUsed}
-                            </span>
-                          )}
+                        <div className="text-[10px] text-zinc-400 font-medium">
+                          {msg.role === 'user' ? 'You' : 'Assistant'}
                         </div>
                         <div className={`max-w-xl p-3.5 rounded-xl text-xs md:text-sm leading-relaxed ${
                           msg.role === 'user' 
@@ -1668,63 +1547,23 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
                               <Markdown>{msg.text}</Markdown>
                             </div>
                           )}
-                          
-                          {/* Thoughts/Action Logs timeline */}
-                          {msg.thoughts && msg.thoughts.length > 0 && (
-                            <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-700 space-y-2">
-                              <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 block">
-                                Autonomous Agent Tool Executions:
-                              </span>
-                              {msg.thoughts.map((th, tIdx) => (
-                                <div key={tIdx} className="bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 rounded-md p-2 text-[10px] font-mono text-zinc-600 dark:text-zinc-300 flex items-center gap-2">
-                                  <div className="h-1.5 w-1.5 bg-emerald-500 rounded-full shrink-0"></div>
-                                  <div>
-                                    Executed tool <span className="font-bold text-zinc-850 dark:text-zinc-100">{th.action}</span> with parameters: <code className="bg-zinc-150 dark:bg-zinc-800 px-1 py-0.5 rounded-sm">{JSON.stringify(th.arguments)}</code>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
                         </div>
                       </div>
                     ))}
                     {aiLoading && (
-                      <div className="flex items-center space-x-2 text-zinc-500 dark:text-zinc-400 text-xs font-mono">
+                      <div className="flex items-center space-x-2 text-zinc-400 text-xs py-2">
                         <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
-                        <span>Dr. GodsCare is preparing clinical evaluation and recommendations...</span>
+                        <span>Typing...</span>
                       </div>
                     )}
                     <div ref={messagesEndRef} />
-                  </div>
-
-                  {/* Quick Responsive Action Chips */}
-                  <div className="px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border-t border-zinc-100 dark:border-zinc-800 flex items-center gap-1.5 overflow-x-auto text-[10px]">
-                    <span className="text-zinc-400 font-mono text-[9px] uppercase font-bold shrink-0">Quick Ask:</span>
-                    {[
-                      "Recommend medicine for headache & fever",
-                      "Recommend specialist cardiologist",
-                      "Diet & lifestyle for high blood pressure",
-                      "Recommend cough & cold medication",
-                      "Stomach acid reflux & indigestion advice",
-                      "Fast triage: dizziness & fatigue"
-                    ].map((chip, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => sendClinicalMessage(chip)}
-                        disabled={aiLoading}
-                        className="px-2.5 py-1 bg-white dark:bg-zinc-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-700 dark:hover:text-emerald-300 border border-zinc-200 dark:border-zinc-700 rounded-full text-zinc-600 dark:text-zinc-300 transition-all shrink-0 cursor-pointer disabled:opacity-50"
-                      >
-                        {chip}
-                      </button>
-                    ))}
                   </div>
 
                   {/* Input Form */}
                   <form onSubmit={handleSendAiMessage} className="p-3 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex gap-2">
                     <input
                       type="text"
-                      placeholder={`Message ${selectedChatbotRole.replace("_", " ")}...`}
+                      placeholder="Type a message..."
                       value={aiInput}
                       onChange={(e) => setAiInput(e.target.value)}
                       disabled={aiLoading}
@@ -1734,10 +1573,10 @@ export default function Dashboard({ userProfile, initialSelectedDoctor, clearIni
                     <button
                       type="submit"
                       disabled={aiLoading || !aiInput.trim()}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                     >
                       <Send className="h-3.5 w-3.5" />
-                      <span>Consult</span>
+                      <span>Send</span>
                     </button>
                   </form>
                 </div>

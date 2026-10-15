@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import { GoogleGenAI } from "@google/genai";
 import { initializeApp } from "firebase/app";
 import { 
   getFirestore, 
@@ -2057,11 +2058,110 @@ function queryDoctorsCatalog(specialtyOrDepartment: string) {
   );
 }
 
-// Handcrafted Local Clinical Consultation Engine
-async function generateLocalClinicalConsultation(messages: any[], uid: string, role: string = "physician") {
+// Initialize server-side Gemini AI client
+let geminiClient: GoogleGenAI | null = null;
+if (process.env.GEMINI_API_KEY) {
   try {
-    // 1. Extract latest user message
+    geminiClient = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
+      },
+    });
+    console.log("[Gemini AI] Server-side Gemini client initialized successfully with @google/genai.");
+  } catch (err) {
+    console.warn("[Gemini AI] Failed to initialize GoogleGenAI client:", err);
+  }
+}
+
+const HOSPITAL_RESOURCE_CONTEXT = `
+HOSPITAL RESOURCES AT GODSCARE MEDICAL CENTER:
+1. DOCTORS & SPECIALISTS:
+   - Dr. Elizabeth Vance (Cardiologist) - 15 yrs exp, Heart disease, hypertension, chest symptoms.
+   - Dr. Marcus Vance (Neurologist) - 12 yrs exp, Headaches, migraines, dizziness, neurological care.
+   - Dr. Elena Rostova (Pediatrician) - 10 yrs exp, Children's health, fever, pediatric wellness.
+   - Dr. Aisha Patel (Dermatologist) - 8 yrs exp, Skin conditions, eczema, rashes, allergies.
+   - Dr. Robert Chen (General Physician) - 18 yrs exp, Primary care, infections, general checkups.
+   - Dr. David Okonkwo (Orthopedic Surgeon) - 14 yrs exp, Joint pain, back pain, bone & muscle injuries.
+2. DEPARTMENTS: Cardiology, Neurology, Pediatrics, Dermatology, Orthopedics, General Medicine, 24/7 Emergency & Trauma.
+3. PHARMACY MEDICATIONS:
+   - Paracetamol 500mg (₦1,200) - Pain & fever relief
+   - Cetirizine 10mg (₦1,800) - Antihistamine for allergies, itching, sneezing
+   - Vitamin C 1000mg + Zinc (₦2,500) - Immune support
+   - Ibuprofen 400mg (₦1,500) - Anti-inflammatory for pain, swelling & joints
+   - Omeprazole 20mg (₦3,200) - Heartburn, acid reflux & stomach ulcer relief
+   - Dextromethorphan Cough Syrup (₦2,800) - Cough & throat soothing
+   - Amoxicillin 500mg (₦4,500) - Bacterial infections (prescription)
+   - Amlodipine 5mg (₦3,800) - Blood pressure management
+4. PORTAL FEATURES: Online doctor appointments, encrypted health records & lab tests vault, pharmacy ordering, and billing invoice receipts.
+5. EMERGENCY CONTACT: 0800-GODSCARE / Emergency 911 (available 24/7).
+`;
+
+const AGENT_SYSTEM_PROMPT = `You are a helpful, friendly, and efficient assistant chatbot for GodsCare Medical Center.
+
+YOUR ROLE:
+You help users with their inquiries, issues, and requests with excellent, friendly, and efficient replies.
+Listen attentively to the user, understanding their needs, and do your best to assist them or direct them to the appropriate resources.
+If a question is not clear, ask clarifying questions.
+Make sure to end your replies with a positive note.
+Do not compile one particular rigid response in total — tailor each response naturally to the user.
+
+CRITICAL ANTI-REPETITION AND CONVERSATION CONTINUITY RULES (STRICT):
+- NEVER REPEAT PREVIOUS ANSWERS: Thoroughly inspect the full conversation history. Do NOT repeat the exact same sentences, phrasing, doctor bios, medication lists, phone numbers, or paragraphs that you or the user already stated in earlier turns.
+- NO REPETITIVE GREETINGS: Do NOT greet the user ("Hello [Name]!", "Welcome to GodsCare", etc.) on every message turn after the initial conversation start. Jump directly into answering their question.
+- DYNAMIC PROGRESSION: If the user is asking a follow-up question or continuing a dialogue, build directly upon what was already established. Offer fresh, specific, and actionable details (e.g., next steps, alternatives, slot times, dosage tips) rather than repeating prior overviews.
+- NEVER RE-PROMPT WITH THE SAME MENU: If the user provides brief answers (like "2 days", "yes", "tomorrow"), recognize that they are answering your previous question. Do NOT reset or re-send a generic menu of options.
+
+CRITICAL FORMATTING & STYLE RULES:
+- Keep responses clean, plain, and conversational.
+- Do NOT include promotional writeups, slogans, or robot introductions (e.g. do NOT say "I am GodsCare AI Quick Respond Agent" or "Welcome to GodsCare Medical Center").
+- Do NOT use heavy markdown headers like "### GodsCare Quick Support" or "### Doctor Appointment Assistance". Just provide plain, natural conversational answers.
+- Be concise, direct, helpful, and warm.
+
+${HOSPITAL_RESOURCE_CONTEXT}
+`;
+
+// Helper to test if a candidate response shares too much similarity with past responses in the thread
+function isRepetitiveResponse(candidate: string, pastTexts: string[]): boolean {
+  if (!pastTexts || pastTexts.length === 0) return false;
+  const cleanCandidate = candidate.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
+  
+  for (const past of pastTexts) {
+    const cleanPast = past.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
+    if (cleanCandidate === cleanPast) return true;
+    
+    // Check significant word overlap
+    const candidateWords = cleanCandidate.split(/\s+/).filter(w => w.length > 3);
+    const pastWords = new Set(cleanPast.split(/\s+/).filter(w => w.length > 3));
+    
+    if (candidateWords.length >= 6) {
+      let overlapCount = 0;
+      for (const w of candidateWords) {
+        if (pastWords.has(w)) overlapCount++;
+      }
+      if (overlapCount / candidateWords.length > 0.65) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Clean, Context-Aware, Anti-Repeating Quick Respond Fallback Engine
+async function generateLocalQuickAgentResponse(messages: any[], uid: string, role: string = "general_assistant") {
+  try {
     const userMessages = messages.filter(m => m.role === "user");
+    const botMessages = messages.filter(m => m.role === "model" || m.role === "assistant");
+    
+    // Extract past bot responses to guarantee zero repetition
+    const pastBotTexts = botMessages.map(m => {
+      if (Array.isArray(m.parts)) return m.parts.map((p: any) => p.text || "").join(" ").trim();
+      return (m.text || m.content || "").trim();
+    }).filter(Boolean);
+
+    // Extract last user message
     let lastMessageText = "";
     if (userMessages.length > 0) {
       const lastMsg = userMessages[userMessages.length - 1];
@@ -2069,289 +2169,385 @@ async function generateLocalClinicalConsultation(messages: any[], uid: string, r
         lastMessageText = lastMsg.parts.map((p: any) => p.text || "").join(" ").trim();
       } else if (typeof lastMsg.content === "string") {
         lastMessageText = lastMsg.content;
+      } else if (typeof lastMsg.text === "string") {
+        lastMessageText = lastMsg.text;
       }
     }
     
     if (!lastMessageText) {
-      lastMessageText = "Hello doctor";
+      lastMessageText = "Hello";
     }
 
-    const textLower = lastMessageText.toLowerCase();
-    
-    // 2. Fetch context from DB to personalize
+    const textLower = lastMessageText.toLowerCase().trim();
     const context = await fetchPatientContext(uid);
-    const patientName = context && !context.error && context.profile ? context.profile.fullName || "Valued Patient" : "Valued Patient";
-
-    // Handle casual greetings / simple small talk
-    if (isCasualGreeting(lastMessageText)) {
-      let greetingText = `### Welcome to GodsCare Medical Center\n\nHello **${patientName}**, I am **Dr. GodsCare**, your Lead Attending Physician and Clinical Consultant.\n\nI am here to attend directly to all your health concerns, evaluate any symptoms you are experiencing, recommend appropriate medications from our pharmacy, or guide you to our specialist doctors.\n\n**How may I assist your health and well-being today?**`;
-      if (textLower.includes("thank")) {
-        greetingText = `### You are Most Welcome\n\nIt is my absolute pleasure to care for your health, **${patientName}**! Please let me know whenever any other symptoms arise or if you need further medication or specialist doctor recommendations.\n\n*Wishing you vibrant health and speedy recovery!*`;
-      } else if (textLower.includes("how are you")) {
-        greetingText = `### Hello ${patientName}\n\nI am doing excellently and fully on duty to attend to your medical needs! How have you been feeling today? Please feel free to share any symptoms, questions, or medical guidance you need.`;
+    const patientName = context && !context.error && context.profile && context.profile.fullName ? context.profile.fullName.split(' ')[0] : "";
+    
+    // Conversation stage awareness
+    const turnCount = userMessages.length;
+    const hasPriorBotGreeting = pastBotTexts.some(t => {
+      const lower = t.toLowerCase();
+      return lower.includes("hello") || lower.includes("how can i help") || lower.includes("welcome to godscare");
+    });
+    
+    // Check what the previous assistant response asked or recommended
+    const previousBotText = pastBotTexts.length > 0 ? pastBotTexts[pastBotTexts.length - 1].toLowerCase() : "";
+    const wasAskedAboutDurationOrFever = previousBotText.includes("how long") || previousBotText.includes("fever") || previousBotText.includes("symptoms");
+    const wasAskedAboutBookingTime = previousBotText.includes("preferred time") || previousBotText.includes("date and time slot") || previousBotText.includes("appointment");
+    
+    // Helper to pick non-repeating response from multiple options
+    const pickNonRepeating = (candidates: string[]): string => {
+      for (const cand of candidates) {
+        if (!isRepetitiveResponse(cand, pastBotTexts)) {
+          return cand;
+        }
       }
+      return candidates[candidates.length - 1];
+    };
+
+    // 1. Follow-up answers to clarifying questions asked by the assistant in the previous turn
+    if (wasAskedAboutDurationOrFever) {
+      const mentionsFever = textLower.includes("fever") || textLower.includes("hot") || textLower.includes("temperature") || textLower.includes("high");
+      const mentionsDuration = textLower.includes("day") || textLower.includes("yesterday") || textLower.includes("week") || textLower.includes("morning") || textLower.includes("hour") || textLower.includes("since");
+      const isAffirmative = textLower === "yes" || textLower === "yeah" || textLower === "yep" || textLower.includes("have fever");
+      const isNegative = textLower === "no" || textLower === "nope" || textLower === "none" || textLower.includes("no fever");
+
+      if (mentionsFever || isAffirmative || textLower.includes("few days") || textLower.includes("3 days") || textLower.includes("week")) {
+        return {
+          text: pickNonRepeating([
+            "Thank you for confirming that. Because symptoms have persisted or include a fever, an in-person clinical evaluation is the safest course of action. I recommend booking an outpatient consultation with Dr. Robert Chen (General Medicine) so our team can examine you. In the meantime, drink plenty of cool fluids, rest, and keep a cool compress available. Would you like me to guide you to booking an appointment?",
+            "Understood. Persistent symptoms with elevated body temperature should be evaluated by a physician rather than managed with home remedies alone. You can book an appointment with our clinical team under the Doctors tab for a same-day or next-day review. Please keep yourself rested and hydrated while you prepare to visit.",
+            "Thank you for the update. Since this has been ongoing, please visit our clinic or consult with Dr. Robert Chen. If your temperature rises further or you develop chills, feel free to walk into our 24/7 emergency unit directly."
+          ]),
+          modelUsed: "plain-chatbot",
+          roleUsed: role
+        };
+      } else if (isNegative || mentionsDuration) {
+        return {
+          text: pickNonRepeating([
+            "Thank you for the context. It's good to hear there is no high fever. For ongoing mild discomfort, staying thoroughly hydrated, taking restful breaks, and using mild over-the-counter medication like Paracetamol (₦1,200) from our Pharmacy tab can provide gentle relief. If you don't feel noticeably better within another 24 hours, booking a clinical visit is recommended. How is your energy level otherwise?",
+            "Got it. Since there is no fever, you can focus on gentle recovery: adequate fluids, light nutrition, and rest. If you'd like to order any supportive medications from our pharmacy, they can be ordered directly from the Pharmacy tab with quick delivery or pickup.",
+            "That's helpful context. Keep monitoring your symptoms closely over the next day or two. If anything changes or begins feeling more severe, don't hesitate to reach out or book a consultation with our outpatient clinic."
+          ]),
+          modelUsed: "plain-chatbot",
+          roleUsed: role
+        };
+      }
+    }
+
+    if (wasAskedAboutBookingTime) {
+      if (textLower.includes("tomorrow") || textLower.includes("morning") || textLower.includes("afternoon") || textLower.includes("today") || textLower.includes("monday") || textLower.includes("friday") || textLower.includes("am") || textLower.includes("pm") || textLower.includes("slot")) {
+        return {
+          text: pickNonRepeating([
+            `Great! To confirm your appointment for that preferred time, open the 'Doctors' tab from the main menu, pick your specialist, and select your preferred slot. You'll complete the standard ₦3,500 booking fee to lock in your priority consultation. Once booked, your digital confirmation will be stored in your Appointments tab. Let me know if you need help finding a specific doctor!`,
+            `Noted! You can finalize that slot directly in the Doctors section. All morning and afternoon clinic hours are open for selection. If you have any previous lab records, you can also view and attach them in your Medical Records tab before your visit.`,
+            `Understood! Head over to the Doctors tab to choose your specialist and tap 'Book Appointment'. The whole process takes less than a minute. Let me know if you'd like more details on what to bring to your consultation!`
+          ]),
+          modelUsed: "plain-chatbot",
+          roleUsed: role
+        };
+      }
+    }
+
+    // 2. Greetings and Casual Small Talk (strictly avoid repeating greetings if already exchanged)
+    if (isCasualGreeting(lastMessageText)) {
+      if (textLower.includes("thank")) {
+        return {
+          text: pickNonRepeating([
+            "You're very welcome! If there is anything else you need, please feel free to ask. Wishing you great health!",
+            "Happy to help! Let me know whenever you have more questions or need medical assistance.",
+            "Always a pleasure. Take care of yourself, and don't hesitate to reach out if you need anything!",
+            "Anytime! We're here for you 24/7 at GodsCare Medical Center."
+          ]),
+          modelUsed: "plain-chatbot",
+          roleUsed: role
+        };
+      }
+
+      if (textLower.includes("how are you")) {
+        return {
+          text: pickNonRepeating([
+            "I'm doing great, thank you for asking! What medical or portal assistance can I help you with right now?",
+            "Doing wonderful and ready to help! Feel free to ask about our doctors, pharmacy, or clinic services.",
+            "I'm here and ready to assist you. How is your day going, and what can I assist you with today?"
+          ]),
+          modelUsed: "plain-chatbot",
+          roleUsed: role
+        };
+      }
+
+      // If already greeted in previous turns, do NOT repeat the greeting
+      if (hasPriorBotGreeting || turnCount > 1) {
+        return {
+          text: pickNonRepeating([
+            "I'm right here! What would you like to explore—booking a doctor, ordering medicines, or checking your medical records?",
+            "Ready when you are. Tell me what symptoms or hospital services you'd like help with.",
+            "How can I assist you further? Let me know what you need and I'll guide you directly."
+          ]),
+          modelUsed: "plain-chatbot",
+          roleUsed: role
+        };
+      }
+
+      const greeting = patientName ? `Hello ${patientName}!` : "Hello!";
       return {
-        text: greetingText,
-        thoughts: [
-          { action: "getUserProfileData", arguments: { uid } }
-        ],
-        modelUsed: "GodsCare-Local-Clinical-Engine",
+        text: `${greeting} How can I help you today? You can ask about doctor appointments, our pharmacy, medical records, or hospital services.`,
+        modelUsed: "plain-chatbot",
         roleUsed: role
       };
     }
 
-    // 3. Clinical Triage & Differential Diagnosis
-    let specialty = "General Medicine";
-    let department = "General Medicine";
-    let severity = "low";
-    let assessment = "";
-    let recommendedMeds: typeof MEDICINES = [];
-    let recommendedDocs: typeof INITIAL_DOCTORS = [];
-    let careSteps: string[] = [];
-    let lifestyleTips: string[] = [];
-    let isRedFlag = false;
+    // 3. Ambiguous or overly brief queries
+    const isSingleWord = textLower.split(/\s+/).length <= 2;
+    const isAmbiguousQuery = [
+      "help", "issue", "problem", "question", "sick", "what", "how", "portal", "ill", "urgent", "need help", "info"
+    ].includes(textLower) || (isSingleWord && !isCasualGreeting(lastMessageText) && !textLower.includes("doctor") && !textLower.includes("med") && !textLower.includes("book"));
 
-    // Check Red Flags / Urgent Triage
-    if (textLower.includes("chest pain") || textLower.includes("crushing chest") || textLower.includes("heart attack") || textLower.includes("difficulty breathing") || textLower.includes("shortness of breath") || textLower.includes("dyspnea") || textLower.includes("stroke") || textLower.includes("facial droop") || textLower.includes("anaphylaxis") || textLower.includes("worst headache") || textLower.includes("coughing blood")) {
-      isRedFlag = true;
-      severity = "high";
-      specialty = "Cardiology / Emergency Medicine";
-      department = "Cardiology";
-      assessment = "Your symptoms indicate acute cardiopulmonary distress or potential vascular compromise requiring immediate emergency triage.";
-      recommendedDocs = queryDoctorsCatalog("Cardiology");
-      careSteps = [
-        "**CALL EMERGENCY SERVICES (911 / Local Emergency Line) IMMEDIATELY.** Do not attempt to drive yourself.",
-        "Sit in a comfortable semi-upright position with back support to reduce cardiac workload.",
-        "Loosen tight clothing around your neck, chest, and waist.",
-        "Keep calm and avoid any physical exertion or sudden movements while emergency personnel are en route."
-      ];
-    }
-    // Cardiology / Heart / Hypertension / Chest Tightness
-    else if (textLower.includes("heart") || textLower.includes("blood pressure") || textLower.includes("hypertension") || textLower.includes("palpitation") || textLower.includes("pulse") || textLower.includes("tightness")) {
-      severity = "medium";
-      specialty = "Cardiology";
-      department = "Cardiology";
-      assessment = "Symptoms may be associated with blood pressure fluctuations, stress-induced tachycardia, or early cardiovascular strain.";
-      recommendedMeds = [
-        MEDICINES.find(m => m.id === "med-8") || MEDICINES[7]
-      ];
-      recommendedDocs = queryDoctorsCatalog("Cardiology");
-      careSteps = [
-        "Record your resting blood pressure and pulse twice daily (morning upon waking and evening before sleep).",
-        "Restrict dietary sodium intake strictly to under 1,500mg per day and avoid stimulants like energy drinks and excess caffeine.",
-        "Engage in 20 minutes of daily low-impact walking and diaphragmatic breathing."
-      ];
-      lifestyleTips = [
-        "Adopt the DASH (Dietary Approaches to Stop Hypertension) diet rich in leafy greens, potassium, and magnesium.",
-        "Maintain adequate hydration with 2.5–3 liters of water daily."
-      ];
-    }
-    // Pediatrics / Child
-    else if (textLower.includes("child") || textLower.includes("baby") || textLower.includes("kid") || textLower.includes("pediatric") || textLower.includes("son") || textLower.includes("daughter") || textLower.includes("infant")) {
-      severity = "medium";
-      specialty = "Pediatrics";
-      department = "Pediatrics";
-      assessment = "Pediatric symptoms require careful weight-adjusted care to ensure hydration and safe fever control.";
-      recommendedMeds = [
-        MEDICINES.find(m => m.id === "med-1") || MEDICINES[0],
-        MEDICINES.find(m => m.id === "med-3") || MEDICINES[2]
-      ];
-      recommendedDocs = queryDoctorsCatalog("Pediatrics");
-      careSteps = [
-        "Administer frequent small sips of oral rehydration solution (ORS) or electrolyte fluids to prevent dehydration.",
-        "Log body temperature every 4 hours using a digital thermometer.",
-        "Use pediatric-formulated paracetamol strictly per weight-based dosing guidelines provided by a pediatrician."
-      ];
-      lifestyleTips = [
-        "Keep the child in light, breathable cotton clothing and ensure quiet, restful sleep.",
-        "Seek emergency evaluation if fever exceeds 38.5°C (101.3°F) or if the child exhibits lethargy."
-      ];
-    }
-    // Brain / Neurology / Headache / Migraine / Dizziness
-    else if (textLower.includes("headache") || textLower.includes("migraine") || textLower.includes("dizzy") || textLower.includes("dizziness") || textLower.includes("head") || textLower.includes("nerve") || textLower.includes("numb")) {
-      severity = textLower.includes("faint") ? "high" : "medium";
-      specialty = "Neurology";
-      department = "Neurology";
-      assessment = "Clinical findings point toward tension-type cephalalgia, migraine episode, or vascular cervicogenic headache.";
-      recommendedMeds = [
-        MEDICINES.find(m => m.id === "med-1") || MEDICINES[0],
-        MEDICINES.find(m => m.id === "med-4") || MEDICINES[3]
-      ];
-      recommendedDocs = queryDoctorsCatalog("Neurology");
-      careSteps = [
-        "Rest in a quiet, dark, well-ventilated room with minimal screen exposure.",
-        "Apply a cold gel pack or damp compress to your forehead or the nape of your neck for 15-minute intervals.",
-        "Drink a large glass of water or electrolyte solution immediately, as mild dehydration is a frequent headache trigger."
-      ];
-      lifestyleTips = [
-        "Maintain consistent sleep hygiene (7–8 hours nightly) and avoid known dietary triggers (aged cheeses, excess MSG, irregular meals).",
-        "Practice neck and shoulder posture stretches if working long hours at a desk."
-      ];
-    }
-    // Dermatology / Skin / Rash / Itch / Allergy
-    else if (textLower.includes("rash") || textLower.includes("itch") || textLower.includes("skin") || textLower.includes("acne") || textLower.includes("eczema") || textLower.includes("allergy") || textLower.includes("sneeze") || textLower.includes("hives")) {
-      severity = "low";
-      specialty = "Dermatology";
-      department = "Dermatology";
-      assessment = "Skin and allergic manifestations indicate acute localized contact dermatitis, urticaria, or seasonal allergic rhinitis.";
-      recommendedMeds = [
-        MEDICINES.find(m => m.id === "med-2") || MEDICINES[1],
-        MEDICINES.find(m => m.id === "med-3") || MEDICINES[2]
-      ];
-      recommendedDocs = queryDoctorsCatalog("Dermatology");
-      careSteps = [
-        "Cleanse the affected skin area gently with lukewarm water and a fragrance-free hypoallergenic cleanser.",
-        "Avoid scratching or rubbing the lesion to prevent secondary bacterial infection.",
-        "Take non-drowsy **Cetirizine 10mg** once daily to suppress systemic histamine activity."
-      ];
-      lifestyleTips = [
-        "Apply a soothing barrier repair cream or calamine lotion to reduce pruritus.",
-        "Identify and eliminate recently introduced detergents, soaps, cosmetics, or synthetic fabrics."
-      ];
-    }
-    // Orthopedics / Muscle / Joint / Back Pain / Sprain
-    else if (textLower.includes("back pain") || textLower.includes("joint") || textLower.includes("muscle") || textLower.includes("knee") || textLower.includes("shoulder") || textLower.includes("sprain") || textLower.includes("bone") || textLower.includes("leg pain")) {
-      severity = "medium";
-      specialty = "Orthopedics";
-      department = "Orthopedics";
-      assessment = "Musculoskeletal strain, lumbar myofascial tension, or localized joint inflammation.";
-      recommendedMeds = [
-        MEDICINES.find(m => m.id === "med-4") || MEDICINES[3],
-        MEDICINES.find(m => m.id === "med-1") || MEDICINES[0]
-      ];
-      recommendedDocs = queryDoctorsCatalog("Orthopedics");
-      careSteps = [
-        "Follow the **PRICE** protocol: Protect the joint, Rest from high-impact loading, Ice (15–20 minutes), Compress gently, and Elevate.",
-        "Take anti-inflammatory **Ibuprofen 400mg** with or after meals to alleviate swelling and discomfort.",
-        "Avoid heavy lifting or sudden twisting movements for the next 48–72 hours."
-      ];
-      lifestyleTips = [
-        "Apply localized heat therapy after 48 hours to promote muscular blood flow and relaxation.",
-        "Maintain lumbar ergonomic support when seated and sleep on a supportive mattress with a pillow under your knees."
-      ];
-    }
-    // Cough / Respiratory / Cold / Flu
-    else if (textLower.includes("cough") || textLower.includes("cold") || textLower.includes("flu") || textLower.includes("throat") || textLower.includes("congestion") || textLower.includes("fever") || textLower.includes("wheez")) {
-      severity = textLower.includes("wheez") ? "medium" : "low";
-      specialty = "General Medicine / Pulmonology";
-      department = "General Medicine";
-      assessment = "Upper respiratory tract infection (viral pharyngitis / acute bronchitis) with mucosal irritation.";
-      recommendedMeds = [
-        MEDICINES.find(m => m.id === "med-6") || MEDICINES[5],
-        MEDICINES.find(m => m.id === "med-1") || MEDICINES[0],
-        MEDICINES.find(m => m.id === "med-3") || MEDICINES[2]
-      ];
-      recommendedDocs = queryDoctorsCatalog("General Medicine");
-      careSteps = [
-        "Inhale steam or use a cool-mist humidifier twice daily to loosen respiratory secretions.",
-        "Gargle with warm saline solution (1/2 tsp salt in 1 cup warm water) 3 times daily to soothe throat tissues.",
-        "Take **Paracetamol 500mg** for fever/body aches and **Dextromethorphan syrup** for dry hacking cough."
-      ];
-      lifestyleTips = [
-        "Drink warm herbal infusions (honey, lemon, ginger) and stay hydrated with at least 3 liters of warm fluids daily.",
-        "Rest your vocal cords and avoid exposure to smoke, cold air drafts, and chemical irritants."
-      ];
-    }
-    // Stomach / Acid Reflux / Indigestion / Ulcer
-    else if (textLower.includes("stomach") || textLower.includes("acid") || textLower.includes("heartburn") || textLower.includes("reflux") || textLower.includes("ulcer") || textLower.includes("nausea") || textLower.includes("belly") || textLower.includes("gastric")) {
-      severity = "low";
-      specialty = "General Medicine / Gastroenterology";
-      department = "General Medicine";
-      assessment = "Gastroesophageal reflux (GERD), acute dyspepsia, or gastric mucosal irritation.";
-      recommendedMeds = [
-        MEDICINES.find(m => m.id === "med-5") || MEDICINES[4],
-        MEDICINES.find(m => m.id === "med-1") || MEDICINES[0]
-      ];
-      recommendedDocs = queryDoctorsCatalog("General Medicine");
-      careSteps = [
-        "Take **Omeprazole 20mg** 30 minutes before your morning meal with a full glass of water.",
-        "Eat smaller, more frequent meals rather than large heavy dinners.",
-        "Avoid lying down for at least 2 to 3 hours after eating."
-      ];
-      lifestyleTips = [
-        "Avoid acidic triggers (citrus fruits, tomatoes, spicy sauces, chocolate, caffeine, carbonated drinks).",
-        "Elevate the head of your bed by 6 inches if nighttime acid reflux is present."
-      ];
-    }
-    // General Health Consultation & Guidance
-    else {
-      severity = "low";
-      specialty = "General Medicine";
-      department = "General Medicine";
-      assessment = "Comprehensive clinical evaluation and preventative wellness guidance.";
-      recommendedMeds = [
-        MEDICINES.find(m => m.id === "med-1") || MEDICINES[0],
-        MEDICINES.find(m => m.id === "med-3") || MEDICINES[2]
-      ];
-      recommendedDocs = queryDoctorsCatalog("General Medicine");
-      careSteps = [
-        "Maintain balanced nutrition with whole foods, lean proteins, and antioxidant-rich vegetables.",
-        "Ensure 7 to 8 hours of restorative sleep to support metabolic and immune recovery.",
-        "Keep a daily log of symptoms, energy levels, and hydration intake."
-      ];
-      lifestyleTips = [
-        "Drink 2.5–3 liters of purified water daily to optimize metabolic clearance.",
-        "Schedule a comprehensive routine clinical check-up and blood panel once or twice annually."
-      ];
+    if (isAmbiguousQuery) {
+      if (hasPriorBotGreeting || turnCount > 1) {
+        return {
+          text: pickNonRepeating([
+            "Could you give me a little more detail on what you're looking for? For instance, are you experiencing symptoms, needing a doctor consultation, or looking for medication from our pharmacy?",
+            "I'm happy to help. What specific aspect can I guide you through—scheduling an appointment, accessing your lab results, or something else?",
+            "Tell me a bit more about what you need so I can give you the exact guidance or department contact."
+          ]),
+          modelUsed: "plain-chatbot",
+          roleUsed: role
+        };
+      }
+      
+      const greeting = patientName ? `Hello ${patientName}!` : "Hello!";
+      return {
+        text: `${greeting} How can I assist you today? Please let me know if you'd like to book a doctor appointment, check pharmacy medicines, access your medical records, or ask about specific symptoms.`,
+        modelUsed: "plain-chatbot",
+        roleUsed: role
+      };
     }
 
-    // Format Clinical Consultation Response
-    let responseText = "";
+    // 4. Appointment & Doctor Booking Requests
+    if (textLower.includes("appointment") || textLower.includes("book") || textLower.includes("schedule") || textLower.includes("see a doctor") || textLower.includes("consultation") || textLower.includes("doctor")) {
+      const isCardio = textLower.includes("heart") || textLower.includes("cardio") || textLower.includes("blood pressure");
+      const isNeuro = textLower.includes("brain") || textLower.includes("head") || textLower.includes("neuro");
+      const isPeds = textLower.includes("child") || textLower.includes("kid") || textLower.includes("baby") || textLower.includes("pediatric");
+      const isDerma = textLower.includes("skin") || textLower.includes("derma") || textLower.includes("rash");
+      const isOrtho = textLower.includes("bone") || textLower.includes("joint") || textLower.includes("ortho") || textLower.includes("back");
+
+      let suggestedDoc = INITIAL_DOCTORS[0]; // Dr. Vance
+      if (isNeuro) suggestedDoc = INITIAL_DOCTORS[1];
+      else if (isPeds) suggestedDoc = INITIAL_DOCTORS[2];
+      else if (isDerma) suggestedDoc = INITIAL_DOCTORS[3];
+      else if (isOrtho) suggestedDoc = INITIAL_DOCTORS[4];
+      else if (!isCardio) suggestedDoc = INITIAL_DOCTORS[5]; // Dr. Robert Chen (General)
+
+      // Check if this doctor was already suggested in earlier messages
+      const alreadySuggestedThisDoc = pastBotTexts.some(t => t.includes(suggestedDoc.name));
+
+      if (alreadySuggestedThisDoc || turnCount > 2) {
+        return {
+          text: pickNonRepeating([
+            `To finalize your booking with ${suggestedDoc.name}, navigate to the Doctors tab, select a date, and pick your preferred time slot. The consultation fee is ₦3,500. Do you prefer a morning or afternoon appointment?`,
+            `Booking with ${suggestedDoc.name} is quick: head to the Doctors section, click 'Book Appointment', and choose your date. Once completed, your confirmed appointment will appear in your Appointments dashboard. Let me know if you need assistance with checkout!`,
+            `If you'd like to see an alternative clinician in that wing or need emergency attention today, our General Outpatient Clinic is also open for walk-ins from 8:00 AM to 6:00 PM. Would you like details on same-day clinic walk-ins?`
+          ]),
+          modelUsed: "plain-chatbot",
+          roleUsed: role
+        };
+      }
+
+      return {
+        text: pickNonRepeating([
+          `I can help you book an appointment. For this, I recommend ${suggestedDoc.name} (${suggestedDoc.specialty}, ${suggestedDoc.experience} exp). They are available on ${suggestedDoc.availableDays.join(", ")}.\n\nYou can head to the Doctors section in the menu to select a convenient date and time slot. If you have a preferred time or need another specialist, please let me know!`,
+          `We have specialized clinicians ready to assist you. ${suggestedDoc.name} in ${suggestedDoc.department} (${suggestedDoc.specialty}) has immediate open consultation slots this week. You can view their full profile and reserve your slot under the Doctors section.`
+        ]),
+        modelUsed: "plain-chatbot",
+        roleUsed: role
+      };
+    }
+
+    // 5. Pharmacy & Medication Inquiries
+    if (textLower.includes("pharmacy") || textLower.includes("medicine") || textLower.includes("medication") || textLower.includes("drug") || textLower.includes("pill") || textLower.includes("prescription")) {
+      const alreadyIntroducedPharmacy = pastBotTexts.some(t => t.includes("Cetirizine") || t.includes("Paracetamol") || t.includes("Pharmacy section"));
+
+      if (alreadyIntroducedPharmacy) {
+        return {
+          text: pickNonRepeating([
+            "You can complete your medicine orders directly in the Pharmacy tab. All formulations are verified by our licensed pharmacists, with secure payment and doorstep dispatch or clinic pickup. Are you looking for a specific medication or dosage instructions?",
+            "In the Pharmacy section, you can filter medications by severity category (Mild, Moderate, Severe) or search by symptoms. Once you add items to your cart, click 'Order Medicine' to finalize your order. Let me know if you'd like details on any particular formulation!",
+            "Our pharmacy is stocked with genuine pharmaceuticals at approved hospital retail rates. If you have an active prescription from your GodsCare clinician, our dispensary will match it directly upon ordering."
+          ]),
+          modelUsed: "plain-chatbot",
+          roleUsed: role
+        };
+      }
+
+      return {
+        text: pickNonRepeating([
+          `Our online pharmacy offers approved medications including Paracetamol 500mg (₦1,200), Cetirizine 10mg for allergies (₦1,800), Ibuprofen 400mg (₦1,500), Omeprazole 20mg for acid reflux (₦3,200), and Vitamin C + Zinc (₦2,500).\n\nYou can browse all available medicines and order directly in the Pharmacy section. If you need a recommendation for specific symptoms, feel free to ask!`,
+          `Our licensed pharmacy provides essential therapeutics with fast fulfillment. Common remedies like Paracetamol, allergy treatments, pain relievers, and multivitamins are available in the Pharmacy tab for immediate ordering. What specific symptoms are you seeking relief for?`
+        ]),
+        modelUsed: "plain-chatbot",
+        roleUsed: role
+      };
+    }
+
+    // 6. Portal Issues, Login, Records, Billing & Receipts
+    if (textLower.includes("login") || textLower.includes("password") || textLower.includes("bill") || textLower.includes("payment") || textLower.includes("receipt") || textLower.includes("record") || textLower.includes("lab result") || textLower.includes("account")) {
+      return {
+        text: pickNonRepeating([
+          `You can access your medical records and lab test results directly under the Medical Records section in your dashboard. All verified invoices and payment receipts are available in the Billing section. If you're experiencing an issue logging in or need help verifying a transaction, please let me know the details!`,
+          `All official diagnosis summaries, test reports, and billing receipts are encrypted and available in your patient portal. To download an invoice or review past payments, click the 'Billing' tab. For lab results, visit 'Medical Records'. Let me know if you need help finding a specific document.`,
+          `If you need an itemized bill or insurance receipt, you can view and print it directly from the Billing tab. If you're experiencing any technical trouble with your account credentials, our admin desk is also available to verify your records.`
+        ]),
+        modelUsed: "plain-chatbot",
+        roleUsed: role
+      };
+    }
+
+    // 7. Hospital Departments, Hours & Emergency Contacts
+    if (textLower.includes("department") || textLower.includes("emergency") || textLower.includes("hours") || textLower.includes("contact") || textLower.includes("location") || textLower.includes("phone") || textLower.includes("ambulance")) {
+      return {
+        text: pickNonRepeating([
+          `GodsCare Emergency & Trauma Center is open 24/7. Outpatient clinics operate Monday to Saturday from 8:00 AM to 6:00 PM. Our emergency hotline is 0800-GODSCARE (or 911). Departments include Cardiology, Neurology, Pediatrics, Dermatology, Orthopedics, and General Medicine. Let me know if you need directions or contact for a specific department!`,
+          `Our main hospital facility is located centrally, with 24-hour round-the-clock emergency admitting and ambulance dispatch. Outpatient specialist clinics run Monday through Saturday. For urgent needs, call our hotline at 0800-GODSCARE.`
+        ]),
+        modelUsed: "plain-chatbot",
+        roleUsed: role
+      };
+    }
+
+    // 8. Red-flag emergency symptoms
+    const isRedFlag = textLower.includes("chest pain") || textLower.includes("heart attack") || textLower.includes("difficulty breathing") || textLower.includes("shortness of breath") || textLower.includes("stroke") || textLower.includes("coughing blood");
+
     if (isRedFlag) {
-      responseText = `### 🚨 Urgent Clinical Assessment\n\nHello **${patientName}**, thank you for reaching out. Based on the symptoms you described ("*${lastMessageText}*"), this is an **urgent red-flag presentation** that requires immediate evaluation.\n\n#### ⚠️ Clinical Assessment\n${assessment}\n\n#### 🚑 Immediate Life-Saving Action Steps\n${careSteps.map((step, idx) => `${idx + 1}. ${step}`).join("\n")}\n\n#### 👨‍⚕️ Emergency Specialist Referral\nOur **Cardiology & Emergency Department** is on standby. Once emergency stabilization is arranged, you can consult with **${recommendedDocs[0]?.name || "Dr. Elizabeth Vance"}** (${recommendedDocs[0]?.specialty || "Cardiologist"}).\n\n*Please seek immediate emergency medical care.*`;
-    } else {
-      responseText = `### 🩺 GodsCare Clinical Consultation\n\nHello **${patientName}**, I have carefully evaluated your inquiry and symptoms ("*${lastMessageText}*"). Here is my clinical evaluation and structured recommendations for your recovery:\n\n#### 📋 Clinical Assessment\n${assessment}\n\n#### 💊 Recommended Medications (GodsCare Pharmacy)\n${recommendedMeds.map(m => `- **${m.name}** (₦${m.price.toLocaleString()}) — *${m.description}*\n  *Indication:* Relieves ${m.symptoms.join(", ")}.\n  *Usage:* Take strictly per label directions with a full glass of water.`).join("\n\n")}\n\n#### 👨‍⚕️ Recommended GodsCare Specialist\n${recommendedDocs.slice(0, 1).map(d => `- **${d.name}** — **${d.specialty}** (${d.department})\n  *Experience:* ${d.experience} | *Rating:* ⭐ ${d.rating}\n  *Bio:* ${d.bio}\n  *Available Days:* ${d.availableDays.join(", ")}`).join("\n")}\n\n#### 📝 Practical Care Steps\n${careSteps.map((step, idx) => `${idx + 1}. ${step}`).join("\n")}\n\n${lifestyleTips.length > 0 ? `#### 🌿 Supportive Lifestyle & Dietary Advice\n${lifestyleTips.map(tip => `- ${tip}`).join("\n")}\n\n` : ""}#### 💬 Doctor's Follow-up\nHow long have you experienced these symptoms, and would you like me to guide you to book a direct consultation with **${recommendedDocs[0]?.name || "our specialist"}** or prepare these medicines from our pharmacy?`;
+      return {
+        text: `These symptoms may indicate a medical emergency. Please call 911 or our 24/7 hotline at 0800-GODSCARE immediately, or have someone take you to the nearest emergency department right away. Please sit down comfortably, loosen any tight clothing, and avoid exerting yourself while help is on the way. Your health and safety are the top priority.`,
+        modelUsed: "plain-chatbot",
+        roleUsed: role
+      };
     }
 
-    // Autonomously log Care Plan to Firestore
-    try {
-      const briefInsight = `Consultation for "${lastMessageText.slice(0, 80)}". Assessment: ${assessment.slice(0, 100)}`;
-      await createCarePlan(uid, briefInsight, careSteps, severity);
-    } catch (fsErr) {
-      console.error("[Clinical Engine] Failed to log CarePlan to Firestore:", fsErr);
+    // 9. Specific Symptoms Guidance (Contextual, Anti-Repeating)
+    let relevantDoc = INITIAL_DOCTORS[5]; // Dr. Robert Chen
+    let relevantMed = MEDICINES[0]; // Paracetamol
+    let careAdvice = "Make sure to stay well hydrated, rest, and monitor your symptoms.";
+
+    if (textLower.includes("headache") || textLower.includes("migraine") || textLower.includes("dizzy")) {
+      relevantDoc = INITIAL_DOCTORS[1];
+      relevantMed = MEDICINES[0];
+      careAdvice = "Rest in a quiet, dark room, drink plenty of water, and try a cool compress on your forehead.";
+    } else if (textLower.includes("fever") || textLower.includes("cough") || textLower.includes("cold") || textLower.includes("throat")) {
+      relevantDoc = INITIAL_DOCTORS[5];
+      relevantMed = MEDICINES[5];
+      careAdvice = "Drink warm fluids with honey and lemon, rest, and keep yourself warm.";
+    } else if (textLower.includes("stomach") || textLower.includes("acid") || textLower.includes("indigestion") || textLower.includes("heartburn")) {
+      relevantDoc = INITIAL_DOCTORS[5];
+      relevantMed = MEDICINES[4];
+      careAdvice = "Avoid spicy or heavy foods, eat smaller meals, and avoid lying down right after eating.";
+    } else if (textLower.includes("rash") || textLower.includes("itch") || textLower.includes("skin") || textLower.includes("allergy")) {
+      relevantDoc = INITIAL_DOCTORS[3];
+      relevantMed = MEDICINES[1];
+      careAdvice = "Gently cleanse with cool water, avoid scratching, and stay away from harsh soaps.";
+    } else if (textLower.includes("back") || textLower.includes("joint") || textLower.includes("muscle") || textLower.includes("knee") || textLower.includes("sprain")) {
+      relevantDoc = INITIAL_DOCTORS[4];
+      relevantMed = MEDICINES[3];
+      careAdvice = "Rest the area, apply ice for 15 minutes at a time, and avoid heavy lifting.";
+    }
+
+    // Check if we already discussed this symptom in previous turns
+    const alreadyAddressedThisSymptom = pastBotTexts.some(t => t.includes(relevantMed.name) || t.includes(careAdvice.slice(0, 20)));
+
+    if (alreadyAddressedThisSymptom) {
+      return {
+        text: pickNonRepeating([
+          `Since these symptoms are still concerning you, consulting with ${relevantDoc.name} (${relevantDoc.specialty}) is the most thorough next step. You can schedule a consultation in the Doctors tab. In the meantime, remember not to push yourself and continue getting plenty of rest. Would you like me to guide you to their next open slot?`,
+          `If resting and basic care have not provided enough relief, having our clinical team perform a physical examination is recommended. Dr. Robert Chen and the outpatient team have appointments open this week. Would you like information on our consultation fees and hours?`,
+          `Please continue monitoring your condition carefully. If you develop any secondary symptoms like nausea, fever, or acute pain, please visit our outpatient clinic or contact 0800-GODSCARE directly.`
+        ]),
+        modelUsed: "plain-chatbot",
+        roleUsed: role
+      };
     }
 
     return {
-      text: responseText,
-      thoughts: [
-        { action: "getUserProfileData", arguments: { uid } },
-        { action: "getHospitalMedicines", arguments: { symptomOrCondition: lastMessageText } },
-        { action: "getHospitalDoctors", arguments: { specialtyOrDepartment: department } },
-        {
-          action: "logNewUserInsight",
-          arguments: {
-            uid,
-            insight: `Consultation: "${lastMessageText.slice(0, 100)}"`,
-            carePlanSteps: careSteps,
-            severity: severity
-          }
-        }
-      ],
-      modelUsed: "GodsCare-Local-Clinical-Engine",
+      text: pickNonRepeating([
+        `For your symptoms, here is some supportive advice: ${careAdvice}\n\nYou can consider ${relevantMed.name} (₦${relevantMed.price.toLocaleString()}) from our pharmacy for relief, or schedule an appointment with ${relevantDoc.name} (${relevantDoc.specialty}) for a clinical checkup.\n\nCould you let me know how long you've had these symptoms, and if there is any fever? Wishing you a quick recovery!`,
+        `To help soothe what you're experiencing: ${careAdvice}\n\nOur pharmacy has ${relevantMed.name} in stock, and ${relevantDoc.name} in ${relevantDoc.department} can evaluate you if needed. How many days have you been experiencing this?`
+      ]),
+      modelUsed: "plain-chatbot",
       roleUsed: role
     };
+
   } catch (err) {
-    console.error("[Clinical Engine Error]:", err);
+    console.error("[Quick Agent Error]:", err);
     return {
-      text: "### GodsCare Clinical Care\n\nI have received your medical inquiry. Please describe your symptoms (e.g. pain location, duration, fever, or specific medication requests), and I will provide you with personalized doctor and pharmacy recommendations.",
-      thoughts: [],
-      modelUsed: "GodsCare-Local-Clinical-Engine",
+      text: `I'm here to assist you with doctor appointments, pharmacy orders, or medical records. What can I help you explore today?`,
+      modelUsed: "plain-chatbot",
       roleUsed: role
     };
   }
 }
 
-// Clinical agent consultation endpoint (used by Dashboard & FloatingAIAssistant)
+// Master AI Agent Quick Respond Controller
 const handleClinicalConsultation = async (req: express.Request, res: express.Response) => {
   const { messages, uid, role } = req.body;
-  if (!uid || !messages) {
-    res.status(400).json({ error: "Missing required clinical parameters: messages, uid." });
+  if (!uid || !messages || !Array.isArray(messages)) {
+    res.status(400).json({ error: "Missing required parameters: messages array and uid." });
     return;
   }
 
-  const selectedRole = role || "physician";
-  const result = await generateLocalClinicalConsultation(messages, uid, selectedRole);
-  res.json(result);
+  const selectedRole = role || "general_assistant";
+
+  // Attempt real Gemini API call first if client is configured
+  if (geminiClient) {
+    try {
+      // Format messages for @google/genai SDK
+      const contents = messages
+        .filter((m: any) => m && (m.text || m.content || (Array.isArray(m.parts) && m.parts.length > 0)))
+        .map((m: any) => {
+          const role = (m.role === "model" || m.role === "assistant") ? "model" : "user";
+          let text = "";
+          if (Array.isArray(m.parts)) {
+            text = m.parts.map((p: any) => p.text || "").join(" ").trim();
+          } else if (typeof m.content === "string") {
+            text = m.content.trim();
+          } else if (typeof m.text === "string") {
+            text = m.text.trim();
+          }
+          return {
+            role,
+            parts: [{ text: text || "Hello" }]
+          };
+        });
+
+      if (contents.length > 0) {
+        console.log(`[Gemini AI] Calling gemini-3.8-flash for user ${uid}...`);
+        const response = await geminiClient.models.generateContent({
+          model: "gemini-3.8-flash",
+          contents: contents,
+          config: {
+            systemInstruction: AGENT_SYSTEM_PROMPT,
+            temperature: 0.7,
+            maxOutputTokens: 1000
+          }
+        });
+
+        const replyText = response.text?.trim();
+        if (replyText) {
+          res.json({
+            text: replyText,
+            modelUsed: "gemini-3.8-flash",
+            roleUsed: selectedRole
+          });
+          return;
+        }
+      }
+    } catch (geminiError: any) {
+      console.warn("[Gemini AI] Live API call failed, falling back to adaptive quick responder:", geminiError?.message || geminiError);
+    }
+  }
+
+  // Adaptive, contextual quick-respond fallback
+  const fallbackResult = await generateLocalQuickAgentResponse(messages, uid, selectedRole);
+  res.json(fallbackResult);
 };
 
 app.post("/api/gemini/agent", handleClinicalConsultation);

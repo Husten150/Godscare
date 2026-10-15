@@ -21,9 +21,12 @@ export function normalizeUserRole(role?: string | null, email?: string | null): 
   // Clinical & Staff Administrators
   if (
     normRole === "admin" ||
+    normRole === "staff" ||
     normRole === "staff_admin" ||
+    normRole === "staff admin" ||
     normRole === "admin.staff" ||
     normEmail === "admin@greencare.com" ||
+    normEmail.includes("staff") ||
     normEmail.includes("admin.staff") ||
     normEmail.includes("billing")
   ) {
