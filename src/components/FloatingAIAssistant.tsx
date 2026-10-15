@@ -55,6 +55,7 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
   });
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (window.innerWidth < 640) return;
     if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("input")) {
       return;
     }
@@ -73,6 +74,7 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (window.innerWidth < 640) return;
     if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("input")) {
       return;
     }
@@ -89,6 +91,16 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
       initialY: currentY
     };
   };
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 640) {
+        setPosition(null);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -251,10 +263,10 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
         <div
           id="global-ai-assistant-modal"
           style={position ? { transform: `translate3d(${position.x}px, ${position.y}px, 0)` } : undefined}
-          className={`fixed bottom-5 right-5 z-50 transition-all duration-200 flex flex-col overflow-hidden border shadow-2xl rounded-2xl ${
+          className={`fixed bottom-3 right-3 left-3 sm:left-auto sm:bottom-6 sm:right-6 z-50 transition-all duration-200 flex flex-col overflow-hidden border shadow-2xl rounded-2xl ${
             isExpanded 
-              ? "w-[94vw] sm:w-[600px] md:w-[700px] h-[84vh] max-h-[820px]" 
-              : "w-[92vw] sm:w-[420px] h-[560px] max-h-[90vh]"
+              ? "w-auto sm:w-[600px] md:w-[700px] h-[82vh] max-h-[820px]" 
+              : "w-auto sm:w-[420px] h-[75vh] sm:h-[560px] max-h-[85vh]"
           } ${
             isDark 
               ? "bg-zinc-900 border-zinc-700/80 text-zinc-100 shadow-zinc-950/80" 
@@ -265,7 +277,7 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
           <div
             onMouseDown={handleMouseDown}
             onTouchStart={handleTouchStart}
-            className={`p-3.5 px-4 flex items-center justify-between border-b cursor-move select-none ${
+            className={`p-3 sm:p-3.5 px-4 flex items-center justify-between border-b cursor-move select-none ${
               isDark 
                 ? "bg-zinc-950 border-zinc-800 text-white" 
                 : "bg-slate-900 border-slate-800 text-white"
@@ -276,8 +288,9 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
                 <MessageSquare className="h-4 w-4" />
               </div>
               <div>
-                <h3 className="text-xs sm:text-sm font-semibold tracking-tight text-white">
-                  Chat
+                <h3 className="text-xs sm:text-sm font-semibold tracking-tight text-white flex items-center gap-1.5">
+                  <span>Chat Assistant</span>
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                 </h3>
               </div>
             </div>
@@ -288,7 +301,7 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
                 onClick={handleResetChat}
                 title="Restart chat"
                 aria-label="Restart chat"
-                className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-md transition-colors cursor-pointer"
+                className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
               </button>
@@ -296,7 +309,7 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
                 onClick={() => setIsExpanded(!isExpanded)}
                 title={isExpanded ? "Collapse" : "Expand"}
                 aria-label={isExpanded ? "Collapse" : "Expand"}
-                className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-md transition-colors cursor-pointer hidden sm:block"
+                className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer hidden sm:block"
               >
                 {isExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
               </button>
@@ -304,7 +317,7 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
                 onClick={() => setIsOpen(false)}
                 title="Close"
                 aria-label="Close"
-                className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 rounded-md transition-colors cursor-pointer"
+                className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -312,7 +325,7 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
           </div>
 
           {/* Messages Stream */}
-          <div className={`flex-1 p-3.5 sm:p-4 overflow-y-auto space-y-3.5 text-xs ${
+          <div className={`flex-1 p-3.5 sm:p-4 overflow-y-auto space-y-3.5 text-xs sm:text-sm ${
             isDark ? "bg-zinc-950/60" : "bg-slate-50/60"
           }`}>
             {messages.map((msg, index) => {
@@ -325,7 +338,7 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
                   </div>
 
                   <div
-                    className={`max-w-[88%] p-3.5 rounded-2xl text-xs leading-relaxed ${
+                    className={`max-w-[90%] sm:max-w-[85%] p-3 sm:p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed break-words overflow-hidden ${
                       isUser
                         ? "bg-emerald-600 text-white rounded-tr-none shadow-xs font-medium" 
                         : isDark
@@ -348,10 +361,36 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
             {loading && (
               <div className="flex items-center space-x-2 text-zinc-400 text-xs py-2">
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-500" />
-                <span>Typing...</span>
+                <span>Typing response...</span>
               </div>
             )}
             <div ref={messagesEndRef} />
+          </div>
+
+          {/* Quick Action Suggestion Chips */}
+          <div className={`px-3 py-1.5 border-t flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[11px] shrink-0 ${
+            isDark ? "bg-zinc-900/90 border-zinc-800" : "bg-zinc-50/90 border-zinc-200/80"
+          }`}>
+            {[
+              "📅 Book Appointment",
+              "💊 Pharmacy Catalog",
+              "⏰ Clinic Hours",
+              "📋 Medical Records"
+            ].map((chip, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleSendMessage(chip.replace(/^[^\s]+\s/, ""))}
+                disabled={loading}
+                className={`whitespace-nowrap px-2.5 py-1 rounded-full text-[10px] font-medium transition-all cursor-pointer shrink-0 border ${
+                  isDark
+                    ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700"
+                    : "bg-white hover:bg-emerald-50 text-emerald-800 border-emerald-200 shadow-xs"
+                }`}
+              >
+                {chip}
+              </button>
+            ))}
           </div>
 
           {/* Input & Send Form */}
@@ -360,7 +399,7 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
               e.preventDefault();
               handleSendMessage();
             }}
-            className={`p-3 border-t flex items-center gap-2 ${
+            className={`p-2.5 sm:p-3 border-t flex items-center gap-2 ${
               isDark ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
             }`}
           >
@@ -368,9 +407,9 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type a message..."
+              placeholder="Ask about appointments, medicines, symptoms..."
               disabled={loading}
-              className={`flex-1 px-3.5 py-2.5 rounded-xl text-xs focus:outline-hidden border transition-all ${
+              className={`flex-1 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm focus:outline-hidden border transition-all ${
                 isDark 
                   ? "bg-zinc-800 border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:border-emerald-500" 
                   : "bg-slate-50 border-zinc-300 text-zinc-900 placeholder-zinc-400 focus:border-emerald-600"
@@ -380,7 +419,7 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
               type="submit"
               disabled={loading || !input.trim()}
               aria-label="Send message"
-              className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
+              className="px-3.5 sm:px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
             >
               <Send className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Send</span>

@@ -34,7 +34,9 @@ import {
   AlertCircle,
   Pill,
   Lock,
-  ArrowRight
+  ArrowRight,
+  Upload,
+  Camera
 } from "lucide-react";
 
 interface AdminAdministratorProps {
@@ -78,6 +80,71 @@ export default function AdminAdministratorDashboard({ themeMode = "light" }: Adm
   const [docImage, setDocImage] = React.useState("");
   const [docConsultationFee, setDocConsultationFee] = React.useState(3500);
   const [modalSaving, setModalSaving] = React.useState(false);
+  const [imageUploadLoading, setImageUploadLoading] = React.useState(false);
+  const [imageUploadError, setImageUploadError] = React.useState("");
+  const [showUrlInput, setShowUrlInput] = React.useState(false);
+  const doctorFileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const processDoctorImageFile = (file: File) => {
+    setImageUploadError("");
+    if (!file.type.startsWith("image/")) {
+      setImageUploadError("Please select a valid image file (PNG, JPG, WEBP).");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setImageUploadError("Image file is too large. Please select an image under 5MB.");
+      return;
+    }
+
+    setImageUploadLoading(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          const MAX_DIM = 400;
+          let w = img.width;
+          let h = img.height;
+          if (w > h) {
+            if (w > MAX_DIM) {
+              h = Math.round((h * MAX_DIM) / w);
+              w = MAX_DIM;
+            }
+          } else {
+            if (h > MAX_DIM) {
+              w = Math.round((w * MAX_DIM) / h);
+              h = MAX_DIM;
+            }
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+            setDocImage(dataUrl);
+          } else {
+            setDocImage((e.target?.result as string) || "");
+          }
+        } catch {
+          setDocImage((e.target?.result as string) || "");
+        } finally {
+          setImageUploadLoading(false);
+        }
+      };
+      img.onerror = () => {
+        setImageUploadError("Could not process image file.");
+        setImageUploadLoading(false);
+      };
+      img.src = (e.target?.result as string) || "";
+    };
+    reader.onerror = () => {
+      setImageUploadError("Could not read image file.");
+      setImageUploadLoading(false);
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Pricing Form States
   const [bookingFee, setBookingFee] = React.useState(3500);
@@ -296,6 +363,8 @@ export default function AdminAdministratorDashboard({ themeMode = "light" }: Adm
     setDocBio(d.bio);
     setDocImage(d.image);
     setDocConsultationFee(d.consultationFee || 3500);
+    setShowUrlInput(false);
+    setImageUploadError("");
     setShowDoctorModal(true);
   };
 
@@ -311,6 +380,8 @@ export default function AdminAdministratorDashboard({ themeMode = "light" }: Adm
     setDocBio("");
     setDocImage("");
     setDocConsultationFee(3500);
+    setShowUrlInput(false);
+    setImageUploadError("");
     setShowDoctorModal(true);
   };
 
@@ -456,10 +527,6 @@ export default function AdminAdministratorDashboard({ themeMode = "light" }: Adm
         }`}>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                <ShieldAlert className="h-3.5 w-3.5" />
-                <span>Admin Administrator • Executive Site Authority</span>
-              </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-display">
                 Hospital Command & Site Control Center
               </h1>
@@ -1174,15 +1241,107 @@ export default function AdminAdministratorDashboard({ themeMode = "light" }: Adm
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-mono font-bold uppercase text-zinc-400">Photo Image URL</label>
-                  <input
-                    type="url"
-                    placeholder="https://images.unsplash.com/photo-..."
-                    value={docImage}
-                    onChange={e => setDocImage(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border text-xs font-mono bg-zinc-800 border-zinc-700 text-white"
-                  />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-mono font-bold uppercase text-zinc-400">Doctor Profile Photo</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowUrlInput(!showUrlInput)}
+                      className="text-[10px] font-mono text-emerald-400 hover:text-emerald-300 underline cursor-pointer"
+                    >
+                      {showUrlInput ? "Switch to File Upload" : "Or enter image URL"}
+                    </button>
+                  </div>
+
+                  {showUrlInput ? (
+                    <div className="space-y-1">
+                      <input
+                        type="url"
+                        placeholder="https://images.unsplash.com/photo-..."
+                        value={docImage}
+                        onChange={e => setDocImage(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border text-xs font-mono bg-zinc-800 border-zinc-700 text-white focus:border-emerald-500"
+                      />
+                      <p className="text-[10px] text-zinc-400">Direct HTTPS image link to doctor portrait</p>
+                    </div>
+                  ) : (
+                    <div>
+                      {/* Hidden file input */}
+                      <input
+                        ref={doctorFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) processDoctorImageFile(file);
+                        }}
+                      />
+
+                      {docImage ? (
+                        <div className="flex items-center gap-4 p-3 rounded-xl border border-zinc-700 bg-zinc-800/80">
+                          <img
+                            src={docImage}
+                            alt="Doctor preview"
+                            className="h-16 w-16 object-cover rounded-xl border border-zinc-600 shadow-xs"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-white truncate">Doctor Photo Ready</p>
+                            <p className="text-[10px] text-zinc-400 mt-0.5">Will display on doctor roster and patient booking cards</p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <button
+                                type="button"
+                                onClick={() => doctorFileInputRef.current?.click()}
+                                className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-zinc-700 hover:bg-zinc-600 text-white transition-colors cursor-pointer flex items-center gap-1"
+                              >
+                                <Camera className="h-3 w-3" />
+                                <span>Change Image</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDocImage("")}
+                                className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => doctorFileInputRef.current?.click()}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const file = e.dataTransfer.files?.[0];
+                            if (file) processDoctorImageFile(file);
+                          }}
+                          className="border-2 border-dashed border-zinc-700 hover:border-emerald-500/60 bg-zinc-800/40 hover:bg-zinc-800/70 p-5 rounded-2xl flex flex-col items-center justify-center text-center cursor-pointer transition-all group"
+                        >
+                          <div className="p-2.5 rounded-full bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform mb-2">
+                            {imageUploadLoading ? (
+                              <RefreshCw className="h-5 w-5 animate-spin" />
+                            ) : (
+                              <Upload className="h-5 w-5" />
+                            )}
+                          </div>
+                          <p className="text-xs font-semibold text-white">
+                            {imageUploadLoading ? "Processing image..." : "Upload Doctor Photo"}
+                          </p>
+                          <p className="text-[10px] text-zinc-400 mt-1">
+                            Click to browse or drag & drop PNG, JPG, or WEBP (up to 5MB)
+                          </p>
+                        </div>
+                      )}
+
+                      {imageUploadError && (
+                        <p className="text-[11px] text-rose-400 mt-1.5 flex items-center gap-1">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          <span>{imageUploadError}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1">
