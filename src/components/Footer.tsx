@@ -73,7 +73,7 @@ export default function Footer({ themeMode = "light" }: FooterProps) {
                   href={getRoutePath("auth")}
                   className={`transition-colors cursor-pointer inline-block ${isDark ? "text-zinc-400 hover:text-white" : "text-zinc-500 hover:text-zinc-900"}`}
                 >
-                  Portal Sign In
+                  Patient Portal
                 </a>
               </li>
             </ul>

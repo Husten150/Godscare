@@ -275,20 +275,20 @@ export default function Header({
                   <span>Logout</span>
                 </button>
               </div>
-            ) : currentView !== "home" ? (
+            ) : (
               <a
                 href={getRoutePath("auth")}
-                className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs transition-all cursor-pointer font-semibold tracking-wide uppercase shadow-xs ${
+                className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs transition-all cursor-pointer font-semibold tracking-wide uppercase shadow-xs whitespace-nowrap shrink-0 ${
                   isDark 
                     ? "bg-emerald-500 hover:bg-emerald-400 text-zinc-950" 
                     : "bg-zinc-900 hover:bg-zinc-800 text-white"
                 }`}
                 id="btn-login-header"
               >
-                <LogIn className="h-3.5 w-3.5" />
+                <LogIn className="h-3.5 w-3.5 shrink-0" />
                 <span>Patient Portal</span>
               </a>
-            ) : null}
+            )}
           </div>
 
           {/* Mobile controls */}
@@ -429,7 +429,7 @@ export default function Header({
                 </a>
               )}
             </>
-          ) : currentView !== "home" ? (
+          ) : (
             <a
               href={getRoutePath("auth")}
               onClick={() => setIsMobileMenuOpen(false)}
@@ -439,9 +439,9 @@ export default function Header({
                   : isDark ? "text-zinc-300 hover:bg-zinc-900" : "text-zinc-600 hover:bg-zinc-50/50 hover:text-zinc-900"
               }`}
             >
-              Sign In to Portal
+              Patient Portal
             </a>
-          ) : null}
+          )}
 
           <div className={`border-t pt-3 ${isDark ? "border-zinc-800" : "border-zinc-100"}`}>
             {userProfile ? (
@@ -477,18 +477,18 @@ export default function Header({
                   <span>Logout</span>
                 </button>
               </div>
-            ) : currentView !== "home" ? (
+            ) : (
               <a
                 href={getRoutePath("auth")}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`w-full py-2.5 rounded-lg text-xs font-semibold tracking-wide uppercase transition-all cursor-pointer flex items-center justify-center space-x-2 ${
+                className={`w-full py-2.5 rounded-lg text-xs font-semibold tracking-wide uppercase transition-all cursor-pointer flex items-center justify-center space-x-2 whitespace-nowrap ${
                   isDark ? "bg-emerald-500 text-zinc-950 font-bold" : "bg-zinc-900 text-white"
                 }`}
               >
-                <LogIn className="h-3.5 w-3.5" />
+                <LogIn className="h-3.5 w-3.5 shrink-0" />
                 <span>Sign In to Patient Portal</span>
               </a>
-            ) : null}
+            )}
           </div>
         </div>
       )}

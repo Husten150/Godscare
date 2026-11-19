@@ -14,8 +14,10 @@ import {
   FileHeart, 
   ArrowRight,
   Sparkles,
-  Sun,
-  Moon
+  LogIn,
+  Lock,
+  Pill,
+  CreditCard
 } from "lucide-react";
 import { getRoutePath } from "../routes";
 
@@ -92,6 +94,29 @@ export default function Home({ setCurrentView, userLoggedIn, themeMode = "light"
     }
   ];
 
+  const portalCapabilities = [
+    {
+      title: "Online Appointments",
+      description: "Schedule, reschedule, or review upcoming specialist consultations across all 6 clinical wings.",
+      icon: <CalendarRange className="h-4 w-4" />
+    },
+    {
+      title: "Diagnostic Vault",
+      description: "Download encrypted lab panels, imaging summaries, and physician notes immediately after review.",
+      icon: <FileHeart className="h-4 w-4" />
+    },
+    {
+      title: "E-Prescriptions",
+      description: "Check active medication instructions, dosage histories, and hospital pharmacy fulfillment status.",
+      icon: <Pill className="h-4 w-4" />
+    },
+    {
+      title: "Billing & Invoices",
+      description: "Inspect itemized clinical statements and complete secure online payments without front-desk queues.",
+      icon: <CreditCard className="h-4 w-4" />
+    }
+  ];
+
   return (
     <div className={`font-sans transition-colors duration-300 ${isDark ? "bg-zinc-950 text-zinc-100" : "bg-[#fbfbfc] text-zinc-800"}`}>
       {/* Hero Section */}
@@ -158,6 +183,29 @@ export default function Home({ setCurrentView, userLoggedIn, themeMode = "light"
                 </p>
                 
                 <div className="space-y-3">
+                  <a 
+                    href={getRoutePath(userLoggedIn ? "dashboard" : "auth")}
+                    className={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer group ${
+                      isDark ? "bg-emerald-500/10 hover:bg-emerald-500/15 border-emerald-500/30" : "bg-emerald-50/70 hover:bg-emerald-50 border-emerald-200"
+                    }`}
+                    id="hero-patient-portal-link"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className={`p-2 rounded-lg ${isDark ? "bg-emerald-500 text-zinc-950" : "bg-zinc-900 text-emerald-400"}`}>
+                        <LogIn className="h-4 w-4" />
+                      </div>
+                      <div className="text-left">
+                        <p className={`text-xs font-bold ${isDark ? "text-white" : "text-zinc-900"}`}>
+                          {userLoggedIn ? "Open Patient Portal Dashboard" : "Patient Portal Sign In"}
+                        </p>
+                        <p className={`text-[10px] font-mono ${isDark ? "text-emerald-400" : "text-emerald-800"}`}>
+                          {userLoggedIn ? "MANAGE VISITS & LAB RECORDS" : "SIGN IN OR CREATE PATIENT ACCOUNT"}
+                        </p>
+                      </div>
+                    </div>
+                    <ArrowRight className={`h-3.5 w-3.5 transition-colors ${isDark ? "text-emerald-400" : "text-emerald-700"}`} />
+                  </a>
+
                   <a 
                     href={getRoutePath("departments")}
                     className={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer group ${
@@ -233,6 +281,95 @@ export default function Home({ setCurrentView, userLoggedIn, themeMode = "light"
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Dedicated Patient Portal Access Section */}
+      <section
+        id="patient-portal"
+        className={`py-16 md:py-20 border-b transition-colors ${
+          isDark ? "bg-zinc-900/40 border-zinc-800 text-zinc-100" : "bg-zinc-50/70 border-zinc-100 text-zinc-900"
+        }`}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start">
+            <div className="lg:col-span-5 space-y-5">
+              <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                <Lock className="h-3.5 w-3.5 shrink-0" />
+                <span>Patient Portal · 24/7 Encrypted Access</span>
+              </div>
+              <h2 className={`text-3xl md:text-4xl font-extrabold tracking-tight font-display [text-wrap:balance] ${
+                isDark ? "text-white" : "text-zinc-900"
+              }`}>
+                Your Clinical Records & Visits in One Place
+              </h2>
+              <p className={`text-sm leading-relaxed ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
+                Sign in to the GodsCare Patient Portal to book specialist consultations, download verified diagnostic reports, review active prescriptions, and manage medical invoices from any device.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <a
+                  href={getRoutePath(userLoggedIn ? "dashboard" : "auth")}
+                  id="home-patient-portal-cta"
+                  className={`inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs font-semibold tracking-wide transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    isDark
+                      ? "bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold"
+                      : "bg-zinc-900 hover:bg-zinc-800 text-white"
+                  }`}
+                >
+                  <LogIn className="h-4 w-4 shrink-0" />
+                  <span>{userLoggedIn ? "Go to Patient Portal" : "Enter Patient Portal"}</span>
+                </a>
+                {!userLoggedIn && (
+                  <a
+                    href={getRoutePath("doctors")}
+                    className={`inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl text-xs font-semibold border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                      isDark
+                        ? "bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border-zinc-700"
+                        : "bg-white hover:bg-zinc-50 text-zinc-700 border-zinc-200"
+                    }`}
+                  >
+                    <span>Browse Specialists</span>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                  </a>
+                )}
+              </div>
+            </div>
+
+            <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {portalCapabilities.map((item) => (
+                <a
+                  key={item.title}
+                  href={getRoutePath(userLoggedIn ? "dashboard" : "auth")}
+                  className={`rounded-2xl p-6 border transition-colors flex flex-col justify-between gap-4 cursor-pointer group ${
+                    isDark
+                      ? "bg-zinc-900/90 border-zinc-800 hover:border-emerald-500/40"
+                      : "bg-white border-zinc-200/80 hover:border-zinc-300"
+                  }`}
+                >
+                  <div className="space-y-2.5">
+                    <div className={`inline-flex p-2 rounded-lg ${
+                      isDark ? "bg-emerald-500/15 text-emerald-400" : "bg-emerald-50 text-emerald-700"
+                    }`}>
+                      {item.icon}
+                    </div>
+                    <h3 className={`text-base font-bold font-display ${isDark ? "text-white" : "text-zinc-900"}`}>
+                      {item.title}
+                    </h3>
+                    <p className={`text-xs leading-relaxed ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
+                      {item.description}
+                    </p>
+                  </div>
+                  <div className={`flex items-center gap-1 text-xs font-semibold ${
+                    isDark ? "text-emerald-400" : "text-zinc-800"
+                  }`}>
+                    <span>{userLoggedIn ? "Open Dashboard" : "Access via Portal"}</span>
+                    <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </a>
+              ))}
+            </div>
           </div>
         </div>
       </section>
