@@ -28,7 +28,18 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   
+  const storageKey = `godscare_floating_chat_${userProfile?.uid || "guest"}`;
+
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const saved = sessionStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // ignore
+    }
     const patientName = userProfile?.name ? userProfile.name.split(' ')[0] : '';
     return [
       {
@@ -38,6 +49,14 @@ export default function FloatingAIAssistant({ userProfile, themeMode }: Floating
       }
     ];
   });
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify(messages));
+    } catch {
+      // ignore
+    }
+  }, [messages, storageKey]);
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);

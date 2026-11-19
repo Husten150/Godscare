@@ -1,12 +1,13 @@
 import React from "react";
 import { Stethoscope, Phone, Mail, MapPin, Clock, Heart } from "lucide-react";
+import { getRoutePath } from "../routes";
 
 interface FooterProps {
   setCurrentView: (view: string) => void;
   themeMode?: "light" | "dark";
 }
 
-export default function Footer({ setCurrentView, themeMode = "light" }: FooterProps) {
+export default function Footer({ themeMode = "light" }: FooterProps) {
   const isDark = themeMode === "dark";
 
   return (
@@ -18,9 +19,9 @@ export default function Footer({ setCurrentView, themeMode = "light" }: FooterPr
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-12">
           {/* Brand & Mission */}
           <div className="space-y-4">
-            <div 
+            <a 
+              href={getRoutePath("home")}
               className="flex items-center space-x-2 cursor-pointer"
-              onClick={() => setCurrentView("home")}
               id="footer-logo"
             >
               <div className={`p-2 rounded-lg ${isDark ? "bg-emerald-500 text-zinc-950" : "bg-zinc-900 text-white"}`}>
@@ -29,7 +30,7 @@ export default function Footer({ setCurrentView, themeMode = "light" }: FooterPr
               <span className={`text-base font-bold font-display tracking-tight ${isDark ? "text-white" : "text-zinc-900"}`}>
                 GodsCareHospital
               </span>
-            </div>
+            </a>
             <p className={`text-xs leading-relaxed ${isDark ? "text-zinc-400" : "text-zinc-500"}`}>
               Our mission is to deliver comprehensive, high-quality healthcare services with compassion, expertise, and a commitment to green medical sustainability.
             </p>
@@ -44,36 +45,36 @@ export default function Footer({ setCurrentView, themeMode = "light" }: FooterPr
             <h3 className={`font-semibold font-display text-xs tracking-wider uppercase mb-4 ${isDark ? "text-white" : "text-zinc-900"}`}>Quick Links</h3>
             <ul className="space-y-2.5 text-xs">
               <li>
-                <button 
-                  onClick={() => setCurrentView("home")}
-                  className={`transition-colors cursor-pointer text-left ${isDark ? "text-zinc-400 hover:text-white" : "text-zinc-500 hover:text-zinc-900"}`}
+                <a 
+                  href={getRoutePath("home")}
+                  className={`transition-colors cursor-pointer inline-block ${isDark ? "text-zinc-400 hover:text-white" : "text-zinc-500 hover:text-zinc-900"}`}
                 >
                   Home Page
-                </button>
+                </a>
               </li>
               <li>
-                <button 
-                  onClick={() => setCurrentView("departments")}
-                  className={`transition-colors cursor-pointer text-left ${isDark ? "text-zinc-400 hover:text-white" : "text-zinc-500 hover:text-zinc-900"}`}
+                <a 
+                  href={getRoutePath("departments")}
+                  className={`transition-colors cursor-pointer inline-block ${isDark ? "text-zinc-400 hover:text-white" : "text-zinc-500 hover:text-zinc-900"}`}
                 >
                   Medical Departments
-                </button>
+                </a>
               </li>
               <li>
-                <button 
-                  onClick={() => setCurrentView("doctors")}
-                  className={`transition-colors cursor-pointer text-left ${isDark ? "text-zinc-400 hover:text-white" : "text-zinc-500 hover:text-zinc-900"}`}
+                <a 
+                  href={getRoutePath("doctors")}
+                  className={`transition-colors cursor-pointer inline-block ${isDark ? "text-zinc-400 hover:text-white" : "text-zinc-500 hover:text-zinc-900"}`}
                 >
                   Our Specialists
-                </button>
+                </a>
               </li>
               <li>
-                <button 
-                  onClick={() => setCurrentView("auth")}
-                  className={`transition-colors cursor-pointer text-left ${isDark ? "text-zinc-400 hover:text-white" : "text-zinc-500 hover:text-zinc-900"}`}
+                <a 
+                  href={getRoutePath("auth")}
+                  className={`transition-colors cursor-pointer inline-block ${isDark ? "text-zinc-400 hover:text-white" : "text-zinc-500 hover:text-zinc-900"}`}
                 >
                   Portal Sign In
-                </button>
+                </a>
               </li>
             </ul>
           </div>

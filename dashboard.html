@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Patient Dashboard | GodsCareHospital</title>
+    <meta name="description" content="Manage appointments, encrypted medical records, pharmacy orders, and billing receipts on your GodsCareHospital patient dashboard." />
+    <meta property="og:title" content="Patient Dashboard | GodsCareHospital" />
+    <meta property="og:description" content="Manage appointments, medical records, and pharmacy orders." />
+    <script>
+      (function () {
+        try {
+          var pref = localStorage.getItem("godscare_theme_preference") || localStorage.getItem("godscare_theme") || "system";
+          var isDark = pref === "dark" || (pref === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (isDark) document.documentElement.classList.add("dark");
+        } catch (e) {}
+
+        function isExtensionError(msg, src) {
+          var s = String(src || "");
+          var m = String(msg || "");
+          return (
+            s.indexOf("chrome-extension://") !== -1 ||
+            s.indexOf("moz-extension://") !== -1 ||
+            m.indexOf("Failed to connect to MetaMask") !== -1 ||
+            m.indexOf("chrome-extension://") !== -1
+          );
+        }
+        window.addEventListener("error", function (e) {
+          if (isExtensionError(e.message || (e.error && e.error.message), e.filename || (e.error && e.error.stack))) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        }, true);
+        window.addEventListener("unhandledrejection", function (e) {
+          var r = e.reason;
+          var msg = typeof r === "string" ? r : (r && r.message) || "";
+          var stk = (r && r.stack) || "";
+          if (isExtensionError(msg, stk)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        }, true);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/pages/dashboard.tsx"></script>
+  </body>
+</html>

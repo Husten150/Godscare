@@ -2578,26 +2578,69 @@ async function seedDoctorsCollection() {
   }
 }
 
+const MPA_PAGE_ROUTES: Record<string, string> = {
+  "/": "index.html",
+  "/index.html": "index.html",
+  "/departments": "departments.html",
+  "/departments.html": "departments.html",
+  "/doctors": "doctors.html",
+  "/doctors.html": "doctors.html",
+  "/auth": "auth.html",
+  "/auth.html": "auth.html",
+  "/dashboard": "dashboard.html",
+  "/dashboard.html": "dashboard.html",
+  "/admin": "admin.html",
+  "/admin.html": "admin.html",
+  "/director": "director.html",
+  "/director.html": "director.html",
+  "/admin-administrator": "director.html",
+  "/admin_administrator": "director.html",
+};
+
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     try {
       const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
         server: { middlewareMode: true },
-        appType: "spa",
+        appType: "mpa",
       });
+
+      // Rewrite clean MPA paths (e.g. /departments -> /departments.html) for Vite MPA middleware
+      app.use((req, _res, next) => {
+        if (req.method === "GET" && req.path && !req.path.startsWith("/api/")) {
+          const normalized = req.path.length > 1 ? req.path.replace(/\/+$/, "").toLowerCase() : "/";
+          const targetHtml = MPA_PAGE_ROUTES[normalized];
+          if (targetHtml && !req.path.endsWith(".html")) {
+            const qIndex = req.url.indexOf("?");
+            const qs = qIndex >= 0 ? req.url.slice(qIndex) : "";
+            req.url = `/${targetHtml}${qs}`;
+          }
+        }
+        next();
+      });
+
       app.use(vite.middlewares);
-      console.log("[Server] Vite dev server mounted.");
+      console.log("[Server] Vite MPA dev server mounted.");
     } catch (err) {
       console.error("[Server] Failed to load Vite dev server:", err);
     }
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
+
+    for (const [routePath, htmlFile] of Object.entries(MPA_PAGE_ROUTES)) {
+      if (!routePath.endsWith(".html")) {
+        app.get(routePath, (_req, res) => {
+          res.sendFile(path.join(distPath, htmlFile));
+        });
+      }
+    }
+
     app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
-    console.log("[Server] Production static files serving activated.");
+    console.log("[Server] Production MPA static files serving activated.");
   }
 
   // Seed initial doctors asynchronously

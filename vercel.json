@@ -6,6 +6,34 @@
       "destination": "/api/index.ts"
     },
     {
+      "source": "/departments",
+      "destination": "/departments.html"
+    },
+    {
+      "source": "/doctors",
+      "destination": "/doctors.html"
+    },
+    {
+      "source": "/auth",
+      "destination": "/auth.html"
+    },
+    {
+      "source": "/dashboard",
+      "destination": "/dashboard.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin.html"
+    },
+    {
+      "source": "/director",
+      "destination": "/director.html"
+    },
+    {
+      "source": "/admin-administrator",
+      "destination": "/director.html"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

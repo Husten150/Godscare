@@ -17,6 +17,7 @@ import {
   Sun,
   Moon
 } from "lucide-react";
+import { getRoutePath } from "../routes";
 
 interface HomeProps {
   setCurrentView: (view: string) => void;
@@ -118,8 +119,8 @@ export default function Home({ setCurrentView, userLoggedIn, themeMode = "light"
               </p>
               
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <button
-                  onClick={() => setCurrentView(userLoggedIn ? "dashboard" : "auth")}
+                <a
+                  href={getRoutePath(userLoggedIn ? "dashboard" : "auth")}
                   className={`px-5 py-3 rounded-lg text-xs font-semibold tracking-wide uppercase transition-all text-center flex items-center justify-center space-x-2 cursor-pointer shadow-xs ${
                     isDark ? "bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold" : "bg-zinc-900 hover:bg-zinc-800 text-white"
                   }`}
@@ -127,9 +128,9 @@ export default function Home({ setCurrentView, userLoggedIn, themeMode = "light"
                 >
                   <CalendarRange className={`h-4 w-4 ${isDark ? "text-zinc-950" : "text-emerald-400"}`} />
                   <span>Book Appointment Online</span>
-                </button>
-                <button
-                  onClick={() => setCurrentView("departments")}
+                </a>
+                <a
+                  href={getRoutePath("departments")}
                   className={`px-5 py-3 border rounded-lg text-xs font-semibold tracking-wide uppercase transition-all text-center flex items-center justify-center space-x-1 cursor-pointer ${
                     isDark ? "bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700" : "bg-white hover:bg-zinc-50 text-zinc-800 border-zinc-200"
                   }`}
@@ -137,7 +138,7 @@ export default function Home({ setCurrentView, userLoggedIn, themeMode = "light"
                 >
                   <span>Explore Specialties</span>
                   <ChevronRight className="h-3.5 w-3.5" />
-                </button>
+                </a>
               </div>
             </div>
 
@@ -157,8 +158,8 @@ export default function Home({ setCurrentView, userLoggedIn, themeMode = "light"
                 </p>
                 
                 <div className="space-y-3">
-                  <div 
-                    onClick={() => setCurrentView("departments")}
+                  <a 
+                    href={getRoutePath("departments")}
                     className={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer group ${
                       isDark ? "bg-zinc-800/60 hover:bg-zinc-800 border-zinc-700/80" : "bg-zinc-50 hover:bg-zinc-100/50 border-zinc-100"
                     }`}
@@ -173,10 +174,10 @@ export default function Home({ setCurrentView, userLoggedIn, themeMode = "light"
                       </div>
                     </div>
                     <ArrowRight className="h-3.5 w-3.5 text-zinc-400 group-hover:text-emerald-400 transition-colors" />
-                  </div>
+                  </a>
 
-                  <div 
-                    onClick={() => setCurrentView("doctors")}
+                  <a 
+                    href={getRoutePath("doctors")}
                     className={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer group ${
                       isDark ? "bg-zinc-800/60 hover:bg-zinc-800 border-zinc-700/80" : "bg-zinc-50 hover:bg-zinc-100/50 border-zinc-100"
                     }`}
@@ -191,10 +192,10 @@ export default function Home({ setCurrentView, userLoggedIn, themeMode = "light"
                       </div>
                     </div>
                     <ArrowRight className="h-3.5 w-3.5 text-zinc-400 group-hover:text-emerald-400 transition-colors" />
-                  </div>
+                  </a>
 
-                  <div 
-                    onClick={() => setCurrentView(userLoggedIn ? "dashboard" : "auth")}
+                  <a 
+                    href={getRoutePath(userLoggedIn ? "dashboard" : "auth")}
                     className={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer group ${
                       isDark ? "bg-zinc-800/60 hover:bg-zinc-800 border-zinc-700/80" : "bg-zinc-50 hover:bg-zinc-100/50 border-zinc-100"
                     }`}
@@ -209,7 +210,7 @@ export default function Home({ setCurrentView, userLoggedIn, themeMode = "light"
                       </div>
                     </div>
                     <ArrowRight className="h-3.5 w-3.5 text-zinc-400 group-hover:text-emerald-400 transition-colors" />
-                  </div>
+                  </a>
                 </div>
               </div>
             </div>
@@ -265,22 +266,22 @@ export default function Home({ setCurrentView, userLoggedIn, themeMode = "light"
                 <h3 className={`text-lg font-bold mb-2 font-display ${isDark ? "text-white" : "text-zinc-900"}`}>{dept.name}</h3>
                 <p className={`text-xs leading-relaxed mb-6 ${isDark ? "text-zinc-400" : "text-zinc-500"}`}>{dept.description}</p>
               </div>
-              <button 
-                onClick={() => setCurrentView("departments")}
+              <a 
+                href={getRoutePath("doctors", { department: dept.name })}
                 className={`text-xs font-semibold flex items-center space-x-1 cursor-pointer group mt-auto align-bottom ${
                   isDark ? "text-emerald-400 hover:text-emerald-300" : "text-zinc-800 hover:text-zinc-900"
                 }`}
               >
                 <span>View Specialist Schedules</span>
                 <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-              </button>
+              </a>
             </div>
           ))}
         </div>
 
         <div className="text-center mt-10">
-          <button
-            onClick={() => setCurrentView("departments")}
+          <a
+            href={getRoutePath("departments")}
             className={`inline-flex items-center space-x-1.5 px-5 py-2.5 border rounded-xl text-xs font-semibold transition-all cursor-pointer ${
               isDark 
                 ? "bg-zinc-900 hover:bg-zinc-800 text-white border-zinc-800" 
@@ -289,7 +290,7 @@ export default function Home({ setCurrentView, userLoggedIn, themeMode = "light"
           >
             <span>See All 6 Clinical Wings</span>
             <ArrowRight className="h-3.5 w-3.5" />
-          </button>
+          </a>
         </div>
       </section>
 

@@ -1,6 +1,7 @@
 import React from "react";
 import { Stethoscope, User, LogIn, LogOut, Menu, X, Shield, LayoutDashboard, Sun, Moon, Monitor } from "lucide-react";
 import { UserProfile, normalizeUserRole } from "../types";
+import { getRoutePath } from "../routes";
 
 interface HeaderProps {
   currentView: string;
@@ -48,9 +49,10 @@ export default function Header({
         <div className="flex justify-between h-16 items-center">
           {/* Brand Logo */}
           <div className="flex items-center space-x-2">
-            <div 
+            <a 
+              href={getRoutePath("home")}
+              onClick={() => setIsMobileMenuOpen(false)}
               className="flex items-center space-x-2 sm:space-x-2.5 cursor-pointer group"
-              onClick={() => handleNavClick("home")}
               id="header-logo"
             >
               <div className={`p-1.5 sm:p-2 rounded-lg transition-colors ${isDark ? "bg-emerald-500 text-zinc-950" : "bg-zinc-900 text-white group-hover:bg-zinc-800"}`}>
@@ -59,15 +61,16 @@ export default function Header({
               <span className={`text-base sm:text-lg font-bold font-display tracking-tight ${isDark ? "text-white" : "text-zinc-900"}`}>
                 GodsCareHospital
               </span>
-            </div>
+            </a>
           </div>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex space-x-8 items-center">
             {navItems.map((item) => (
-              <button
+              <a
                 key={item.id}
-                onClick={() => handleNavClick(item.id)}
+                href={getRoutePath(item.id)}
+                onClick={() => setIsMobileMenuOpen(false)}
                 className={`font-sans font-medium text-xs tracking-wide uppercase transition-colors cursor-pointer ${
                   currentView === item.id 
                     ? isDark ? "text-emerald-400 border-b-2 border-emerald-400 pb-1 font-bold" : "text-zinc-900 border-b border-zinc-900 pb-1 font-semibold"
@@ -76,14 +79,15 @@ export default function Header({
                 id={`nav-${item.id}`}
               >
                 {item.label}
-              </button>
+              </a>
             ))}
 
             {userProfile ? (
               <>
                 {normalizedRole === "patient" && (
-                  <button
-                    onClick={() => handleNavClick("dashboard")}
+                  <a
+                    href={getRoutePath("dashboard")}
+                    onClick={() => setIsMobileMenuOpen(false)}
                     className={`font-sans font-medium text-xs tracking-wide uppercase transition-colors flex items-center space-x-1 cursor-pointer ${
                       currentView === "dashboard"
                         ? isDark ? "text-emerald-400 border-b-2 border-emerald-400 pb-1 font-bold" : "text-zinc-900 border-b border-zinc-900 pb-1 font-semibold"
@@ -93,11 +97,12 @@ export default function Header({
                   >
                     <LayoutDashboard className="h-3.5 w-3.5" />
                     <span>My Dashboard</span>
-                  </button>
+                  </a>
                 )}
                 {normalizedRole === "admin_administrator" && (
-                  <button
-                    onClick={() => handleNavClick("admin_administrator")}
+                  <a
+                    href={getRoutePath("admin_administrator")}
+                    onClick={() => setIsMobileMenuOpen(false)}
                     className={`font-sans font-medium text-xs tracking-wide uppercase transition-colors flex items-center space-x-1.5 cursor-pointer px-2.5 py-1 rounded-md border ${
                       currentView === "admin_administrator" || currentView === "admin"
                         ? isDark ? "text-amber-300 border-amber-500/50 bg-amber-500/20 font-bold" : "text-amber-900 border-amber-400 bg-amber-100 font-semibold"
@@ -107,11 +112,12 @@ export default function Header({
                   >
                     <Shield className="h-3.5 w-3.5 text-amber-400" />
                     <span>Admin Administrator Console</span>
-                  </button>
+                  </a>
                 )}
                 {normalizedRole === "admin" && (
-                  <button
-                    onClick={() => handleNavClick("admin")}
+                  <a
+                    href={getRoutePath("admin")}
+                    onClick={() => setIsMobileMenuOpen(false)}
                     className={`font-sans font-medium text-xs tracking-wide uppercase transition-colors flex items-center space-x-1 cursor-pointer ${
                       currentView === "admin"
                         ? isDark ? "text-emerald-400 border-b-2 border-emerald-400 pb-1 font-bold" : "text-zinc-900 border-b border-zinc-900 pb-1 font-semibold"
@@ -121,23 +127,10 @@ export default function Header({
                   >
                     <Shield className="h-3.5 w-3.5" />
                     <span>Staff Admin Panel</span>
-                  </button>
+                  </a>
                 )}
               </>
-            ) : (
-              <button
-                onClick={() => handleNavClick("auth")}
-                className={`font-sans font-medium text-xs tracking-wide uppercase transition-colors flex items-center space-x-1.5 cursor-pointer px-2.5 py-1 rounded-md border ${
-                  currentView === "auth"
-                    ? isDark ? "text-emerald-300 border-emerald-500/50 bg-emerald-500/20 font-bold" : "text-emerald-900 border-emerald-400 bg-emerald-100 font-semibold"
-                    : isDark ? "text-zinc-400 hover:text-white border-zinc-800 hover:bg-zinc-800/50" : "text-zinc-600 border-zinc-200 hover:bg-zinc-50"
-                }`}
-                id="nav-signin-link"
-              >
-                <LogIn className="h-3.5 w-3.5 text-emerald-500" />
-                <span>Portal Sign In</span>
-              </button>
-            )}
+            ) : null}
           </nav>
 
           {/* Right-side controls: Theme Switcher & Auth / Profile */}
@@ -233,8 +226,8 @@ export default function Header({
             {userProfile ? (
               <div className="flex items-center space-x-3">
                 {/* Clickable Username / Profile Badge */}
-                <button
-                  onClick={() => handleNavClick(normalizedRole === "admin_administrator" ? "admin_administrator" : normalizedRole === "admin" ? "admin" : "dashboard")}
+                <a
+                  href={getRoutePath(normalizedRole === "admin_administrator" ? "admin_administrator" : normalizedRole === "admin" ? "admin" : "dashboard")}
                   title="Click to view your profile & dashboard"
                   className={`flex items-center space-x-2 text-xs p-1.5 rounded-xl transition-all cursor-pointer border group ${
                     isDark 
@@ -267,7 +260,7 @@ export default function Header({
                       ★ Prem
                     </span>
                   )}
-                </button>
+                </a>
 
                 <button
                   onClick={onLogout}
@@ -282,9 +275,9 @@ export default function Header({
                   <span>Logout</span>
                 </button>
               </div>
-            ) : (
-              <button
-                onClick={() => handleNavClick("auth")}
+            ) : currentView !== "home" ? (
+              <a
+                href={getRoutePath("auth")}
                 className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs transition-all cursor-pointer font-semibold tracking-wide uppercase shadow-xs ${
                   isDark 
                     ? "bg-emerald-500 hover:bg-emerald-400 text-zinc-950" 
@@ -294,8 +287,8 @@ export default function Header({
               >
                 <LogIn className="h-3.5 w-3.5" />
                 <span>Patient Portal</span>
-              </button>
-            )}
+              </a>
+            ) : null}
           </div>
 
           {/* Mobile controls */}
@@ -380,9 +373,10 @@ export default function Header({
           isDark ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-100 text-zinc-900"
         }`}>
           {navItems.map((item) => (
-            <button
+            <a
               key={item.id}
-              onClick={() => handleNavClick(item.id)}
+              href={getRoutePath(item.id)}
+              onClick={() => setIsMobileMenuOpen(false)}
               className={`block w-full text-left px-3 py-2 rounded-md font-sans font-medium text-sm cursor-pointer ${
                 currentView === item.id 
                   ? isDark ? "bg-zinc-900 text-emerald-400 font-bold" : "bg-zinc-50 text-zinc-900 font-semibold"
@@ -390,14 +384,15 @@ export default function Header({
               }`}
             >
               {item.label}
-            </button>
+            </a>
           ))}
 
           {userProfile ? (
             <>
               {normalizedRole === "patient" && (
-                <button
-                  onClick={() => handleNavClick("dashboard")}
+                <a
+                  href={getRoutePath("dashboard")}
+                  onClick={() => setIsMobileMenuOpen(false)}
                   className={`block w-full text-left px-3 py-2 rounded-md font-sans font-medium text-sm cursor-pointer ${
                     currentView === "dashboard"
                       ? isDark ? "bg-zinc-900 text-emerald-400 font-bold" : "bg-zinc-50 text-zinc-900 font-semibold"
@@ -405,11 +400,12 @@ export default function Header({
                   }`}
                 >
                   My Dashboard
-                </button>
+                </a>
               )}
               {normalizedRole === "admin_administrator" && (
-                <button
-                  onClick={() => handleNavClick("admin_administrator")}
+                <a
+                  href={getRoutePath("admin_administrator")}
+                  onClick={() => setIsMobileMenuOpen(false)}
                   className={`block w-full text-left px-3 py-2 rounded-md font-sans font-medium text-sm cursor-pointer ${
                     currentView === "admin_administrator" || currentView === "admin"
                       ? isDark ? "bg-amber-950/60 text-amber-300 font-bold border border-amber-500/30" : "bg-amber-100 text-amber-900 font-semibold border border-amber-300"
@@ -417,11 +413,12 @@ export default function Header({
                   }`}
                 >
                   Admin Administrator Console
-                </button>
+                </a>
               )}
               {normalizedRole === "admin" && (
-                <button
-                  onClick={() => handleNavClick("admin")}
+                <a
+                  href={getRoutePath("admin")}
+                  onClick={() => setIsMobileMenuOpen(false)}
                   className={`block w-full text-left px-3 py-2 rounded-md font-sans font-medium text-sm cursor-pointer ${
                     currentView === "admin"
                       ? isDark ? "bg-zinc-900 text-emerald-400 font-bold" : "bg-zinc-50 text-zinc-900 font-semibold"
@@ -429,12 +426,13 @@ export default function Header({
                   }`}
                 >
                   Staff Admin Panel
-                </button>
+                </a>
               )}
             </>
-          ) : (
-            <button
-              onClick={() => handleNavClick("auth")}
+          ) : currentView !== "home" ? (
+            <a
+              href={getRoutePath("auth")}
+              onClick={() => setIsMobileMenuOpen(false)}
               className={`block w-full text-left px-3 py-2 rounded-md font-sans font-medium text-sm cursor-pointer ${
                 currentView === "auth"
                   ? isDark ? "bg-zinc-900 text-emerald-400 font-bold" : "bg-zinc-50 text-zinc-900 font-semibold"
@@ -442,17 +440,15 @@ export default function Header({
               }`}
             >
               Sign In to Portal
-            </button>
-          )}
+            </a>
+          ) : null}
 
           <div className={`border-t pt-3 ${isDark ? "border-zinc-800" : "border-zinc-100"}`}>
             {userProfile ? (
               <div className="space-y-3 px-3">
-                <div 
-                  onClick={() => {
-                    handleNavClick(normalizedRole === "admin_administrator" ? "admin_administrator" : normalizedRole === "admin" ? "admin" : "dashboard");
-                    setIsMobileMenuOpen(false);
-                  }}
+                <a 
+                  href={getRoutePath(normalizedRole === "admin_administrator" ? "admin_administrator" : normalizedRole === "admin" ? "admin" : "dashboard")}
+                  onClick={() => setIsMobileMenuOpen(false)}
                   className={`flex items-center space-x-3 text-xs p-2.5 rounded-xl border transition-all cursor-pointer ${
                     isDark ? "bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-white" : "bg-zinc-50 border-zinc-200 hover:bg-zinc-100 text-zinc-900"
                   }`}
@@ -467,7 +463,7 @@ export default function Header({
                     <div className={`font-bold ${isDark ? "text-white" : "text-zinc-900"}`}>{userProfile.name}</div>
                     <div className="text-[10px] font-mono text-emerald-500 uppercase tracking-wider font-semibold">Click to open profile</div>
                   </div>
-                </div>
+                </a>
                 <button
                   onClick={() => {
                     onLogout();
@@ -481,17 +477,18 @@ export default function Header({
                   <span>Logout</span>
                 </button>
               </div>
-            ) : (
-              <button
-                onClick={() => handleNavClick("auth")}
+            ) : currentView !== "home" ? (
+              <a
+                href={getRoutePath("auth")}
+                onClick={() => setIsMobileMenuOpen(false)}
                 className={`w-full py-2.5 rounded-lg text-xs font-semibold tracking-wide uppercase transition-all cursor-pointer flex items-center justify-center space-x-2 ${
                   isDark ? "bg-emerald-500 text-zinc-950 font-bold" : "bg-zinc-900 text-white"
                 }`}
               >
                 <LogIn className="h-3.5 w-3.5" />
                 <span>Sign In to Patient Portal</span>
-              </button>
-            )}
+              </a>
+            ) : null}
           </div>
         </div>
       )}

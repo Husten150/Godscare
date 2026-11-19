@@ -10,6 +10,7 @@ import {
   ShieldAlert, 
   ShieldCheck 
 } from "lucide-react";
+import { getRoutePath } from "../routes";
 
 interface DepartmentsProps {
   onSelectDepartment: (deptName: string) => void;
@@ -200,9 +201,9 @@ export default function Departments({ onSelectDepartment, themeMode = "light" }:
 
                 {/* Direct CTA */}
                 <div className={`border-t pt-5 mt-auto ${isDark ? "border-zinc-800" : "border-zinc-100"}`}>
-                  <button
-                    onClick={() => onSelectDepartment(dept.name)}
-                    className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+                  <a
+                    href={getRoutePath("doctors", { department: dept.name })}
+                    className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all inline-flex items-center justify-center space-x-2 cursor-pointer ${
                       isDark 
                         ? "bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold" 
                         : "bg-zinc-900 hover:bg-zinc-800 text-white"
@@ -210,7 +211,7 @@ export default function Departments({ onSelectDepartment, themeMode = "light" }:
                   >
                     <span>View Specialists & Schedule</span>
                     <ArrowRight className={`h-3.5 w-3.5 ${isDark ? "text-zinc-950" : "text-emerald-400"}`} />
-                  </button>
+                  </a>
                 </div>
               </div>
             ))}
